@@ -80,3 +80,52 @@ Criterio de aceptación:
 **Funcionaba a la primera:** no Qué fallo le expliqué: no reconocia carpeta con espacios se tubo que revisar el codigo expanduser() y ya funciono.
 
 **Qué aprendí:** Es muy importante hacer los test completos para detectar fallos.
+
+
+## 2026-11-04 Comprobacion Funcionamiento Tareas: Compruebo tareas antes de empezar yesta ok, sigo sesion 2
+
+**Herramienta:** MiM0-V2.6-F1ash Free OpenCode
+
+**Prompt del plan (agente Build):** 
+Le pido que me exolique este paso y le paso este prompt en plan
+{
+      "nombre": "limpiar-temporales",
+      "descripcion": "Borra .tmp con más de 30 días",
+      "tipo": "borrar",
+      "filtro": { "patron": ".*\\.tmp$", "mas_antiguo_que_dias": 30 },
+      "confirmar": true
+    }
+      {
+      "nombre": "abertura-edge",
+      "descripcion": "Abre el edge al iniciar sesion.",
+      "tipo": "abre el edge y me posicion",
+      "filtro": { "patron": ".*\\.tmp$", "mas_antiguo_que_dias": 30 },
+      "confirmar": true
+    }  esto es el patron del fichero acciones json explicamelo como lo rellenarias la ultima accion para abrir el edge de forma automatica y se abran las ventanas 1._ https://mi-es.solutions30.com 2.-http://webmail.atroningenieros.com/ 3.https://support2.epson.net/esup_v3/Login.do 4 https://support.epson-europe.com/partners/. revisalo como se aria y me lo explicas
+   
+
+**Qué corregí del plan:** Despues de la explicacion Me da la explicacion y relleno el accion. y le pido para crear rama en git para no tocar main.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** Se realiza en plan y desarrolla el codigo  esta ok
+
+**Funcionaba a la primera:** Hoy si ha ido a la primera 
+
+**Qué aprendí:** Es muy importante hacer los test completos para detectar fallos.
+
+
+
+
+{
+      "nombre": "limpiar-temporales",
+      "descripcion": "Borra .tmp con más de 30 días",
+      "tipo": "borrar",
+      "filtro": { "patron": ".*\\.tmp$", "mas_antiguo_que_dias": 30 },
+      "confirmar": true
+    }
+      {
+      "nombre": "abertura-edge",
+      "descripcion": "Abre el edge al iniciar sesion.",
+      "tipo": "abre el edge y me posicion",
+      "filtro": { "patron": ".*\\.tmp$", "mas_antiguo_que_dias": 30 },
+      "confirmar": true
+    }  esto es el patron del fichero acciones json explicamelo como lo rellenarias la ultima accion para abrir el edge de forma automatica y se abran las ventanas 1._ https://mi-es.solutions30.com 2.-http://webmail.atroningenieros.com/ 3.https://support2.epson.net/esup_v3/Login.do 4 https://support.epson-europe.com/partners/. revisalo como se aria y me lo explicas
