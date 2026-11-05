@@ -22,34 +22,46 @@
       "tipo": "borrar",
       "filtro": { "patron": ".*\\.tmp$", "mas_antiguo_que_dias": 30 },
       "confirmar": true
-    }
-      {
-      "nombre": "abertura-edge",
-      "descripcion": "Abre el edge con 4 Paginas.",
+    },
+    {
+      "nombre": "abrir-nav",
+      "descripcion": "Abre el explorador por defecto con 4 Paginas. -e edge, -g google, -f firefox, -url ponemos url como Https://epson.com",
       "tipo": "abrir",
-      "url": {
-         "https://mi-es.solutions30.com",
+      "urls": [
+        "https://mi-es.solutions30.com",
         "http://webmail.atroningenieros.com/",
         "https://support2.epson.net/esup_v3/Login.do",
-        "https://support.epson-europe.com/partners/"
-      },
+        "https://support.epson-europe.com/partners/",
+        "https://ceroxi.com/es/radio/gb/bbc-news-hd-720p-ea391ded",
+        "https://support.hp.com/es-es/drivers"
+      ],
       "confirmar": true
-    }
-        {
+    },
+    {
       "nombre": "borrar-descargas",
       "descripcion": "Borra de la carpeta descarga los .pdf, .exe, .Zip, .jpg ,.docx, con mas de 30 dias.",
       "tipo": "mover",
       "origen": "~/Descargas",
       "filtro": { "extensiones": [".pdf", ".docx", ".exe", ".zip", ".jpg"] },
-      "destino": "Papelera de reciclaje"
+      "destino": "Papelera de reciclaje",
+      "confirmar": true
     },
-        {
-      "nombre": "ordenar-descargas",
-      "descripcion": "Mueve los PDF y documentos de Descargas a Documentos/PDF",
-      "tipo": "mover",
+    {
+      "nombre": "transformar-pdf-html",
+      "descripcion": "transforma los Ficheros Pdf en Html, para Visualizar en el navegador .",
+      "tipo": "transformar",
+      "origen": "~/Descargas/pdf",
+      "filtro": { "extensiones": [".pdf", ".docx", ".exe", ".zip", ".jpg"] },
+      "destino": "~/Descargas/HTMLtransformados",
+      "confirmar": true
+    },
+    {
+      "nombre": "comprimir-antiguos",
+      "descripcion": "Comprime las carpetas viejas mas de 400 dias sin tocarse",
+      "tipo": "comprimir",
       "origen": "~/Descargas",
-      "filtro": { "extensiones": [".pdf", ".docx"] },
+      "filtro": { "extensiones": [".pdf", ".docx", ".zip", ".rar", ".jpg", ".jpeg"], "mas_antiguo_que_dias": 400 },
       "destino": "~/Documentos/PDF"
-    },
+    }
   ]
 }
