@@ -91,5 +91,5 @@ class Motor:
         if not carpeta_ejecucion.is_dir():
             raise TareasError(f"La carpeta {carpeta_ejecucion} no existe")
 
-        ficheros = self.seleccionar(carpeta_ejecucion, accion.config.get("filtro") or [])
+        ficheros = self.seleccionar(carpeta_ejecucion, accion.config.get("filtro", {}))
         return accion.ejecutar(ficheros, False, urls_efectivas, abrir=abrir)

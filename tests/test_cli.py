@@ -181,7 +181,7 @@ def test_ejecutar_real_con_e_abre_edge_con_las_urls_del_fichero(monkeypatch) -> 
 
     vistos: list[str] = []
 
-    def _falso_abrir(url: str, nuevo: int = 0) -> bool:
+    def _falso_abrir(url: str, new: int = 0) -> bool:
         vistos.append(url)
         return True
 
@@ -201,7 +201,7 @@ def test_ejecutar_real_con_url_abre_solo_esa_url(monkeypatch) -> None:
 
     vistos: list[str] = []
 
-    def _falso_abrir(url: str, nuevo: int = 0) -> bool:
+    def _falso_abrir(url: str, new: int = 0) -> bool:
         vistos.append(url)
         return True
 

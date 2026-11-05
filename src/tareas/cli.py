@@ -412,7 +412,7 @@ def ejecutar(
         )
 
     urls_efectivas = (
-        list(url) if url is not None else list(accion.config.get("urls") or [])
+        [url] if url is not None else list(accion.config.get("urls") or [])
     )
     pestañas = "1 pestaña" if len(urls_efectivas) == 1 else f"{len(urls_efectivas)} pestañas"
 
