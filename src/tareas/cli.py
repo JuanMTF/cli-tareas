@@ -16,19 +16,16 @@ from rich.table import Table
 import tareas
 from tareas import config
 from tareas.acciones import (
-    CAMPOS_POR_TIPO,
     ErrorConfiguracion,
     NAVEGADORES,
     RUTA_ACCIONES,
-    TIPOS_CONOCIDOS,
     abrir_en_navegador,
     abrir_por_defecto,
     buscar_navegador,
     cargar_acciones,
     validar_acciones,
 )
-from tareas.acciones import _NOMBRE_KEBAB
-from tareas.errores import AccionNoValida, TareasError
+from tareas.errores import TareasError
 from tareas.motor import Motor
 
 consola = Console()
@@ -220,79 +217,6 @@ def _mostrar_detalle(accion: dict[str, Any]) -> None:
     consola.print(tabla)
 
 
-def _validar_accion(accion: Any, indice: int, nombres_vistos: set[str]) -> None:
-    """Comprueba una sola acción y lanza AccionNoValida si no cumple el esquema."""
-    if not isinstance(accion, dict):
-        raise AccionNoValida(
-            {"nombre": f"acción {indice}"},
-            "estructura",
-            "debe ser un objeto JSON con sus campos.",
-        )
-
-    nombre = accion.get("nombre")
-    if not isinstance(nombre, str) or not nombre:
-        raise AccionNoValida(accion, "nombre", "falta el campo «nombre».")
-    if not _NOMBRE_KEBAB.match(nombre):
-        raise AccionNoValida(
-            accion, "nombre", "debe ir en minúsculas con guiones (kebab-case)."
-        )
-    if nombre in nombres_vistos:
-        raise AccionNoValida(accion, "nombre", "duplicado; cada acción debe ser única.")
-    nombres_vistos.add(nombre)
-
-    descripcion = accion.get("descripcion")
-    if not isinstance(descripcion, str) or not descripcion.strip():
-        raise AccionNoValida(accion, "descripcion", "falta «descripcion» (un texto no vacío).")
-
-    tipo = accion.get("tipo")
-    if not isinstance(tipo, str) or not tipo:
-        raise AccionNoValida(accion, "tipo", "falta el campo «tipo».")
-    if tipo not in TIPOS_CONOCIDOS:
-        raise AccionNoValida(
-            accion, "tipo", f"tipo «{tipo}» desconocido. Válidos: {', '.join(TIPOS_CONOCIDOS)}."
-        )
-
-    if "confirmar" in accion and not isinstance(accion["confirmar"], bool):
-        raise AccionNoValida(accion, "confirmar", "debe ser true o false.")
-
-    for campo in CAMPOS_POR_TIPO[tipo]:
-        if campo not in accion:
-            raise AccionNoValida(accion, campo, f"al tipo «{tipo}» le falta el campo «{campo}».")
-
-    if tipo == "abrir":
-        urls = accion.get("urls")
-        if not isinstance(urls, list) or not urls:
-            raise AccionNoValida(accion, "urls", "debe ser una lista con al menos una dirección.")
-        for indice_url, url in enumerate(urls, start=1):
-            if not isinstance(url, str) or not url.startswith(("http://", "https://")):
-                raise AccionNoValida(
-                    accion, "urls", f"la URL {indice_url} no empieza por http:// o https://: {url!r}."
-                )
-
-    if "filtro" in accion:
-        filtro = accion["filtro"]
-        if not isinstance(filtro, dict):
-            raise AccionNoValida(accion, "filtro", "debe ser un objeto JSON.")
-        if "extensiones" in filtro and not isinstance(filtro["extensiones"], list):
-            raise AccionNoValida(accion, "filtro.extensiones", "debe ser una lista.")
-        if "extensiones" not in filtro and "patron" not in filtro:
-            raise AccionNoValida(accion, "filtro", "necesita «extensiones» o «patron».")
-        if tipo == "borrar" and "patron" not in filtro:
-            raise AccionNoValida(accion, "filtro", f"al tipo «borrar» le falta «filtro.patron».")
-        if "mas_antiguo_que_dias" in filtro:
-            dias = filtro["mas_antiguo_que_dias"]
-            if isinstance(dias, bool) or not isinstance(dias, int) or dias <= 0:
-                raise AccionNoValida(
-                    accion,
-                    "filtro.mas_antiguo_que_dias",
-                    f"debe ser un número de días mayor que 0 (encontrado: {dias!r}).",
-                )
-
-    for campo in ("origen", "destino", "plantilla"):
-        if campo in accion and (not isinstance(accion[campo], str) or not accion[campo].strip()):
-            raise AccionNoValida(accion, campo, f"«{campo}» debe ser un texto no vacío.")
-
-
 @app.command()
 def validar(
     fichero: Annotated[
@@ -309,7 +233,7 @@ def validar(
         acciones = config.cargar(ruta)
         nombres_vistos: set[str] = set()
         for indice, accion in enumerate(acciones, start=1):
-            _validar_accion(accion, indice, nombres_vistos)
+            config.validar(accion, indice, nombres_vistos)
     except TareasError as exc:
         _error_validacion(str(exc), exc.codigo_salida)
 
@@ -322,10 +246,13 @@ def ejecutar(
         str,
         typer.Argument(help="Nombre de la acción a ejecutar (ej.: abrir-nav)."),
     ],
-    url: Annotated[
+    entrada: Annotated[
         str | None,
         typer.Argument(
-            help="Abre esta URL en lugar de las del fichero (ej.: https://epson.com)."
+            help=(
+                "URL si la acción es de tipo «abrir» (ej.: https://epson.com); "
+                "carpeta de origen para el resto (ej.: ~/pruebas-tareas)."
+            ),
         ),
     ] = None,
     simular: Annotated[
@@ -346,6 +273,21 @@ def ejecutar(
     edge: Annotated[
         bool,
         typer.Option("--edge", "-e", help="Usa Microsoft Edge."),
+    ] = False,
+    carpeta: Annotated[
+        str | None,
+        typer.Option(
+            "--carpeta",
+            "-c",
+            help="Carpeta de origen (sobreescribe 'origen' del fichero de acciones). Admite ~.",
+        ),
+    ] = None,
+    si: Annotated[
+        bool,
+        typer.Option(
+            "--si",
+            help="No pregunta: acepta la confirmación (para borrar y las que tengan 'confirmar').",
+        ),
     ] = False,
 ) -> None:
     """Ejecuta una de las acciones definidas en el fichero de acciones."""
@@ -380,14 +322,42 @@ def ejecutar(
     motor = Motor(lista)
     accion = motor.acciones.get(nombre)
 
-    if url is not None and not url.startswith(("http://", "https://")):
-        _error(f"La URL debe empezar por http:// o https://: {url}", codigo=1)
+    if accion is None:
+        _error(_mensaje_no_existe(nombre, lista), codigo=1)
+
+    tipo = accion.config.get("tipo")
+
+    # La segunda posición es URL si la acción abre URLs; si no, es la carpeta.
+    es_url = bool(entrada) and entrada.lower().startswith(("http://", "https://"))
+    url: str | None = None
+    if tipo == "abrir":
+        if entrada is not None and not es_url:
+            _error(
+                f"La acción «{nombre}» es de tipo «abrir»: la URL debe empezar "
+                f"por http:// o https://: {entrada}",
+                codigo=1,
+            )
+        url = entrada if es_url else None
+    elif entrada is not None:
+        if es_url:
+            _error(
+                f"La acción «{nombre}» es de tipo «{tipo}» y no abre URLs: "
+                f"pon ahí la carpeta o usa --carpeta RUTA (admite ~).",
+                codigo=1,
+            )
+        if carpeta is not None:
+            _error(
+                "La carpeta se indica una sola vez: en la posición 2 o con --carpeta, no en las dos.",
+                codigo=1,
+            )
+        carpeta = entrada
+        url = None
 
     if simular:
         try:
             resultados = motor.ejecutar(
                 nombre,
-                None,
+                Path(carpeta).expanduser() if carpeta else None,
                 True,
                 urls=([url] if url is not None else None),
                 navegador=navegador,
@@ -401,28 +371,24 @@ def ejecutar(
                 _error(resultado.mensaje, codigo=1)
         return
 
-    if accion is None:
-        _error(_mensaje_no_existe(nombre, lista), codigo=1)
-
-    if accion.config.get("tipo") != "abrir":
-        _error(
-            f"La acción «{nombre}» es de tipo «{accion.config.get('tipo')}» y todavía no está "
-            f"implementado (solo «abrir»).",
-            codigo=1,
-        )
-
-    urls_efectivas = (
-        [url] if url is not None else list(accion.config.get("urls") or [])
-    )
-    pestañas = "1 pestaña" if len(urls_efectivas) == 1 else f"{len(urls_efectivas)} pestañas"
-
-    if accion.config.get("confirmar", False):
-        typer.confirm(f"¿Abrir {destino} con {pestañas}?", abort=True)
+    # --simular ya ha salido arriba; aquí solo falta no preguntar si se pidió --si.
+    if not si:
+        if tipo == "abrir":
+            urls_efectivas = (
+                [url] if url is not None else list(accion.config.get("urls") or [])
+            )
+            pestañas = "1 pestaña" if len(urls_efectivas) == 1 else f"{len(urls_efectivas)} pestañas"
+            if accion.config.get("confirmar", False):
+                typer.confirm(f"¿Abrir {destino} con {pestañas}?", abort=True)
+        else:
+            # Borrar siempre pide confirmación; el resto, solo si «confirmar» es true.
+            if tipo == "borrar" or accion.config.get("confirmar", False):
+                typer.confirm(f"¿Ejecutar «{nombre}» ({tipo})?", abort=True)
 
     try:
         resultados = motor.ejecutar(
             nombre,
-            None,
+            Path(carpeta).expanduser() if carpeta else None,
             False,
             urls=([url] if url is not None else None),
             navegador=navegador,

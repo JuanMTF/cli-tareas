@@ -53,8 +53,8 @@ class Motor:
     ) -> list[Resultado]:
         """Ejecuta una acción y devuelve la lista de resultados.
 
-        Para el tipo «abrir» abre las URLs (o describe la simulación). Para los
-        tipos de ficheros todavía no se han implementado.
+        Para el tipo «abrir» abre las URLs (o describe la simulación); para el
+        resto selecciona ficheros en la carpeta y los mueve/borra/etc.
         """
         accion = self.acciones.get(nombre)
         if accion is None:
@@ -65,31 +65,33 @@ class Motor:
             raise TareasError(f"No existe la acción: {nombre}.{detalle}")
 
         tipo = accion.config.get("tipo")
-        if tipo != "abrir":
-            raise TareasError(
-                f"La acción «{nombre}» es de tipo «{tipo}» y todavía no está "
-                f"implementado (solo «abrir»)."
-            )
 
-        urls_efectivas = list(urls) if urls else list(accion.config.get("urls") or [])
+        if tipo == "abrir":
+            urls_efectivas = list(urls) if urls else list(accion.config.get("urls") or [])
 
-        if simular:
-            navegador_mensaje = NAVEGADORES[navegador] if navegador else "el explorador por defecto"
-            mensaje = (
-                f"SIMULACIÓN: no se abre ni se toca nada. Acción: {nombre} "
-                f"Navegador: {navegador_mensaje} Ventana: 1 con {len(urls_efectivas)} pestañas: "
-                + " ".join(urls_efectivas)
-            )
-            if ruta_navegador:
-                mensaje += f" Ejecutable: {ruta_navegador}"
-            return [Resultado(True, mensaje)]
+            if simular:
+                navegador_mensaje = NAVEGADORES[navegador] if navegador else "el explorador por defecto"
+                mensaje = (
+                    f"SIMULACIÓN: no se abre ni se toca nada. Acción: {nombre} "
+                    f"Navegador: {navegador_mensaje} Ventana: 1 con {len(urls_efectivas)} pestañas: "
+                    + " ".join(urls_efectivas)
+                )
+                if ruta_navegador:
+                    mensaje += f" Ejecutable: {ruta_navegador}"
+                return [Resultado(True, mensaje)]
 
-        if navegador and ruta_navegador is None:
-            raise TareasError(f"No se encontró {NAVEGADORES[navegador]} en este equipo.")
+            if navegador and ruta_navegador is None:
+                raise TareasError(f"No se encontró {NAVEGADORES[navegador]} en este equipo.")
 
+            return accion.ejecutar([], False, urls_efectivas, abrir=abrir)
+
+        # Acciones sobre ficheros: mover, renombrar, borrar, transformar, comprimir.
         carpeta_ejecucion = (carpeta or Path(accion.config.get("origen") or ".")).expanduser()
         if not carpeta_ejecucion.is_dir():
-            raise TareasError(f"La carpeta {carpeta_ejecucion} no existe")
+            raise TareasError(
+                f"La carpeta {carpeta_ejecucion} no existe. "
+                f"Crea la carpeta o indica otra con --carpeta RUTA (admite ~)."
+            )
 
         ficheros = self.seleccionar(carpeta_ejecucion, accion.config.get("filtro", {}))
-        return accion.ejecutar(ficheros, False, urls_efectivas, abrir=abrir)
+        return accion.ejecutar(ficheros, simular, urls, abrir=abrir)

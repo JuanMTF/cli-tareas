@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "click>=8.5.0",
     "typer>=0.27.3",    #tu version puede ser otra: la pone uv add
 ]
 

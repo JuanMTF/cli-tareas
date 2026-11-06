@@ -12,37 +12,25 @@ import re
 import shutil
 import sys
 import webbrowser
+import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from tareas import config as mod_config
 from tareas.errores import TareasError
 
-# Fichero de configuración. Relativo a la carpeta del proyecto (ejecutar desde ahí).
-RUTA_ACCIONES = Path("src/tareas/docs/acciones.json")
+# Fichero de configuración. Ruta absoluta (dentro del paquete): sirve desde cualquier carpeta.
+RUTA_ACCIONES = mod_config.RUTA_ACCIONES
 
-VERSION_ESPERADA = 1
+VERSION_ESPERADA = mod_config.VERSION_ESPERADA
 
-# Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
-TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar", "comprimir")
-
-# Campos que puede llevar cualquier acción.
-CAMPOS_COMUNES = ("nombre", "descripcion", "tipo", "confirmar")
-
-# Campos obligatorios de cada tipo.
-CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
-    "mover": ("origen", "filtro", "destino"),
-    "renombrar": ("filtro", "plantilla"),
-    "borrar": ("filtro", "confirmar"),
-    "abrir": ("urls",),
-    "transformar": ("origen", "filtro", "destino"),
-    "comprimir": ("origen", "filtro", "destino"),
-}
-
-# Campos que se reconocen dentro de 'filtro'.
-FILTRO_CONOCIDO = ("extensiones", "patron", "mas_antiguo_que_dias")
-
-# nombre en kebab-case: minúsculas, números, guiones, tildes y espacios. Ej.: abrir-nav
-_NOMBRE_KEBAB = re.compile(r"^[a-z0-9áéíóúüñ]+(?:[ -áéíóúüñ][a-z0-9áéíóúüñ]+)*$")
+# Catálogo de tipos y campos: la fuente única vive en config.py.
+TIPOS_CONOCIDOS = mod_config.TIPOS_CONOCIDOS
+CAMPOS_COMUNES = mod_config.CAMPOS_COMUNES
+CAMPOS_POR_TIPO = mod_config.CAMPOS_POR_TIPO
+FILTRO_CONOCIDO = mod_config.FILTRO_CONOCIDO
+_NOMBRE_KEBAB = mod_config._NOMBRE_KEBAB
 
 # Navegadores pedibles con -e, -g o -f: clave -> nombre para los mensajes.
 NAVEGADORES: dict[str, str] = {
@@ -50,6 +38,42 @@ NAVEGADORES: dict[str, str] = {
     "chrome": "Google Chrome",
     "firefox": "Mozilla Firefox",
 }
+
+
+def destino_libre(destino: Path) -> Path:
+    """Devuelve una ruta libre: si ya existe, añade « (1)», « (2)»... sin sobrescribir."""
+    if not destino.exists():
+        return destino
+    sufijo = destino.suffix
+    base = destino.name[: -len(sufijo)] if sufijo else destino.name
+    n = 1
+    while True:
+        candidato = destino.with_name(f"{base} ({n}){sufijo}")
+        if not candidato.exists():
+            return candidato
+        n += 1
+
+
+_HUECO = re.compile(r"\{([^{}]+)\}")
+
+
+def aplicar_plantilla(plantilla: str, fichero: Path, n: int, fecha: datetime) -> str:
+    """Rellena los huecos de una plantilla: {fecha:...}, {n:03}, {ext}, {nombre}."""
+
+    def _sustituir(match: re.Match[str]) -> str:
+        hueco = match.group(1)
+        if hueco.startswith("fecha:"):
+            return fecha.strftime(hueco[len("fecha:") :])
+        if hueco.startswith("n:"):
+            ancho = hueco[len("n:") :]
+            return f"{n:0{int(ancho)}d}" if ancho.isdigit() else str(n)
+        if hueco == "ext":
+            return fichero.suffix
+        if hueco == "nombre":
+            return fichero.stem
+        return match.group(0)
+
+    return _HUECO.sub(_sustituir, plantilla)
 
 
 class Resultado:
@@ -81,10 +105,156 @@ class Accion:
         tipo = self.config.get("tipo")
         if tipo == "abrir":
             return self._ejecutar_abrir(simular, urls, abrir)
+        if tipo == "mover":
+            return self._mover(ficheros, simular)
+        if tipo == "renombrar":
+            return self._renombrar(ficheros, simular)
+        if tipo == "borrar":
+            return self._borrar(ficheros, simular)
+        if tipo == "transformar":
+            return self._transformar(ficheros, simular)
+        if tipo == "comprimir":
+            return self._comprimir(ficheros, simular)
         raise TareasError(
             f"La acción «{self.config.get('nombre')}» es de tipo «{tipo}» "
             f"y todavía no está implementado (solo «abrir»)."
         )
+
+    def _destino(self) -> Path:
+        """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino)."""
+        return Path(self.config.get("destino") or ".").expanduser()
+
+    def _origen(self) -> Path:
+        """Carpeta origen expandiendo ~."""
+        return Path(self.config.get("origen") or ".").expanduser()
+
+    def _mover(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
+        """Mueve cada fichero al destino, sin sobrescribir nunca."""
+        destino = self._destino()
+        if not ficheros:
+            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
+        if not simular:
+            destino.mkdir(parents=True, exist_ok=True)
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            libre = destino_libre(destino / fichero.name)
+            if simular:
+                resultados.append(
+                    Resultado(
+                        True,
+                        f"SIMULACIÓN: movería «{fichero.name}» → «{libre}»",
+                    )
+                )
+            else:
+                shutil.move(str(fichero), str(libre))
+                resultados.append(
+                    Resultado(True, f"Movido: «{fichero.name}» → «{libre}»")
+                )
+        return resultados
+
+    def _renombrar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
+        """Renombra cada fichero con la plantilla, sin sobrescribir nunca."""
+        plantilla = self.config.get("plantilla", "{nombre}{ext}")
+        if not ficheros:
+            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
+        resultados: list[Resultado] = []
+        for indice, fichero in enumerate(ficheros, start=1):
+            fecha = datetime.fromtimestamp(fichero.stat().st_mtime)
+            nuevo_nombre = aplicar_plantilla(plantilla, fichero, indice, fecha)
+            destino = destino_libre(fichero.with_name(nuevo_nombre))
+            if simular:
+                resultados.append(
+                    Resultado(
+                        True,
+                        f"SIMULACIÓN: renombraría «{fichero.name}» → «{destino.name}»",
+                    )
+                )
+            else:
+                fichero.rename(destino)
+                resultados.append(
+                    Resultado(
+                        True, f"Renombrado: «{fichero.name}» → «{destino.name}»"
+                    )
+                )
+        return resultados
+
+    def _borrar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
+        """Borra cada fichero (la confirmación la pide la CLI)."""
+        if not ficheros:
+            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            if simular:
+                resultados.append(
+                    Resultado(True, f"SIMULACIÓN: borraría «{fichero.name}»")
+                )
+            else:
+                fichero.unlink()
+                resultados.append(Resultado(True, f"Borrado: «{fichero.name}»"))
+        return resultados
+
+    def _transformar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
+        """Genera un HTML por fichero que lo incrusta/abre en el navegador."""
+        destino = self._destino()
+        if not ficheros:
+            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
+        if not simular:
+            destino.mkdir(parents=True, exist_ok=True)
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            salida = destino_libre(destino / f"{fichero.stem}.html")
+            if simular:
+                resultados.append(
+                    Resultado(
+                        True,
+                        f"SIMULACIÓN: generaría «{salida.name}» para «{fichero.name}»",
+                    )
+                )
+            else:
+                uri = fichero.resolve().as_uri()
+                html = (
+                    "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n"
+                    "  <meta charset=\"UTF-8\">\n"
+                    f"  <title>{fichero.name}</title>\n"
+                    "</head>\n<body>\n"
+                    f"  <h1>{fichero.name}</h1>\n"
+                    f"  <iframe src=\"{uri}\" width=\"100%\" height=\"90vh\"></iframe>\n"
+                    f"  <p><a href=\"{uri}\">Abrir el original</a></p>\n"
+                    "</body>\n</html>\n"
+                )
+                salida.write_text(html, encoding="utf-8")
+                resultados.append(
+                    Resultado(
+                        True,
+                        f"Transformado: «{fichero.name}» → «{salida.name}»",
+                    )
+                )
+        return resultados
+
+    def _comprimir(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
+        """Comprime los ficheros en un .zip en el destino, sin sobrescribir."""
+        destino = self._destino()
+        if not ficheros:
+            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
+        nombre_zip = destino / f"{self.config.get('nombre', 'tareas')}.zip"
+        libre = destino_libre(nombre_zip)
+        if simular:
+            return [
+                Resultado(
+                    True,
+                    f"SIMULACIÓN: comprimiría {len(ficheros)} fichero(s) en «{libre}»",
+                )
+            ]
+        destino.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(libre, "w", zipfile.ZIP_DEFLATED) as archivo:
+            for fichero in ficheros:
+                archivo.write(fichero, arcname=fichero.name)
+        return [
+            Resultado(
+                True,
+                f"Comprimido: {len(ficheros)} fichero(s) → «{libre}»",
+            )
+        ]
 
     def _ejecutar_abrir(
         self,
@@ -151,139 +321,12 @@ def cargar_acciones(ruta: Path) -> list[dict[str, Any]]:
 
 
 def validar_acciones(acciones: list[dict[str, Any]]) -> tuple[list[str], list[str]]:
-    """Comprueba todas las acciones. Devuelve (errores, avisos)."""
-    errores: list[str] = []
-    avisos: list[str] = []
+    """Comprueba todas las acciones. Devuelve (errores, avisos).
 
-    if not acciones:
-        avisos.append("No hay ninguna acción definida.")
-        return errores, avisos
-
-    nombres_vistos: set[str] = set()
-    for indice, accion in enumerate(acciones, start=1):
-        err, aviso = _validar_accion(accion, indice, nombres_vistos)
-        errores.extend(err)
-        avisos.extend(aviso)
-
-    return errores, avisos
-
-
-def _validar_accion(
-    accion: Any, indice: int, nombres_vistos: set[str]
-) -> tuple[list[str], list[str]]:
-    """Comprueba una sola acción. Devuelve (errores, avisos)."""
-    errores: list[str] = []
-    avisos: list[str] = []
-
-    if not isinstance(accion, dict):
-        return [f"acción {indice}: debe ser un objeto JSON con sus campos."], []
-
-    nombre = accion.get("nombre")
-    etiqueta = f"acción {indice}" + (f" «{nombre}»" if isinstance(nombre, str) else "")
-
-    # nombre
-    if not isinstance(nombre, str) or not nombre:
-        errores.append(f"{etiqueta}: falta el campo 'nombre'.")
-    else:
-        if not _NOMBRE_KEBAB.match(nombre):
-            errores.append(
-                f"{etiqueta}: 'nombre' debe ir en minúsculas con guiones (kebab-case)."
-            )
-        if nombre in nombres_vistos:
-            errores.append(f"{etiqueta}: 'nombre' duplicado; cada acción debe ser única.")
-        nombres_vistos.add(nombre)
-
-    # descripcion
-    descripcion = accion.get("descripcion")
-    if not isinstance(descripcion, str) or not descripcion.strip():
-        errores.append(f"{etiqueta}: falta 'descripcion' (un texto no vacío).")
-
-    # tipo
-    tipo = accion.get("tipo")
-    if not isinstance(tipo, str) or not tipo:
-        errores.append(f"{etiqueta}: falta el campo 'tipo'.")
-        return errores, avisos
-    if tipo not in TIPOS_CONOCIDOS:
-        errores.append(
-            f"{etiqueta}: tipo «{tipo}» desconocido. "
-            f"Válidos: {', '.join(TIPOS_CONOCIDOS)}."
-        )
-        return errores, avisos
-
-    # confirmar, si está, tiene que ser booleano
-    if "confirmar" in accion and not isinstance(accion["confirmar"], bool):
-        errores.append(f"{etiqueta}: 'confirmar' debe ser true o false.")
-
-    # campos que el tipo necesita sí o sí
-    for campo in CAMPOS_POR_TIPO[tipo]:
-        if campo not in accion:
-            errores.append(
-                f"{etiqueta}: al tipo «{tipo}» le falta el campo «{campo}»."
-            )
-
-    # urls (solo tipo abrir)
-    if tipo == "abrir" and "urls" in accion:
-        urls = accion["urls"]
-        if not isinstance(urls, list) or not urls:
-            errores.append(
-                f"{etiqueta}: 'urls' debe ser una lista con al menos una dirección."
-            )
-        else:
-            for indice_url, url in enumerate(urls, start=1):
-                if not isinstance(url, str) or not url.startswith(
-                    ("http://", "https://")
-                ):
-                    errores.append(
-                        f"{etiqueta}: la URL {indice_url} no empieza por "
-                        f"http:// o https://: {url!r}."
-                    )
-
-    # filtro, si está, tiene forma de comprobar
-    if "filtro" in accion:
-        filtro = accion["filtro"]
-        if not isinstance(filtro, dict):
-            errores.append(f"{etiqueta}: 'filtro' debe ser un objeto JSON.")
-        else:
-            if "extensiones" in filtro and not isinstance(filtro["extensiones"], list):
-                errores.append(f"{etiqueta}: 'filtro.extensiones' debe ser una lista.")
-            if not ("extensiones" in filtro or "patron" in filtro):
-                errores.append(
-                    f"{etiqueta}: 'filtro' necesita 'extensiones' o 'patron'."
-                )
-            if tipo == "borrar" and "patron" not in filtro:
-                errores.append(f"{etiqueta}: al tipo «borrar» le falta 'filtro.patron'.")
-
-            # mas_antiguo_que_dias, si está, tiene que ser un número de días
-            if "mas_antiguo_que_dias" in filtro:
-                dias = filtro["mas_antiguo_que_dias"]
-                if isinstance(dias, bool) or not isinstance(dias, int) or dias <= 0:
-                    errores.append(
-                        f"{etiqueta}: 'filtro.mas_antiguo_que_dias' debe ser un "
-                        f"número de días mayor que 0 (encontrado: {dias!r})."
-                    )
-
-            # una errata en el filtro (ej.: mas_antiguio_que_dias) se avisa
-            desconocidos = sorted(set(filtro) - set(FILTRO_CONOCIDO))
-            if desconocidos:
-                avisos.append(
-                    f"{etiqueta}: campos en 'filtro' que no se reconocen: "
-                    f"{', '.join(desconocidos)}."
-                )
-
-    # campos de texto que no pueden estar vacíos
-    for campo in ("origen", "destino", "plantilla"):
-        valor = accion.get(campo)
-        if campo in accion and (not isinstance(valor, str) or not valor.strip()):
-            errores.append(f"{etiqueta}: '{campo}' debe ser un texto no vacío.")
-
-    # campos que no le tocan a este tipo -> aviso, no error
-    de_mas = sorted(set(accion) - set(CAMPOS_COMUNES) - set(CAMPOS_POR_TIPO[tipo]))
-    if de_mas:
-        avisos.append(
-            f"{etiqueta}: campos que no le tocan a «{tipo}»: {', '.join(de_mas)}."
-        )
-
-    return errores, avisos
+    La validación real vive en config.py (AccionNoValida); aquí solo se
+    delega para no tener dos versiones distintas.
+    """
+    return mod_config.validar_acciones(acciones)
 
 
 def _bases_windows() -> tuple[str, ...]:
