@@ -4,14 +4,14 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
 ---
 # Esquema de acciones.json
 - Raíz: {"version": 1, "acciones": [...]}. Cada acción: nombre (único, minúsculas-con-guiones), descripcion, tipo.
-- Tipos (los 6 de TIPOS_CONOCIDOS, en config.py):
+- Tipos (los 7 de TIPOS_CONOCIDOS, en config.py):
   - `abrir` → requiere `urls` (lista de http:// o https://). Abre pestañas en el navegador.
   - `mover` → requiere `origen`, `filtro` y `destino`. Mueve sin sobrescribir.
+  - `copiar` → requiere `origen`, `filtro` y `destino`. Copia sin borrar el original.
   - `renombrar` → requiere `filtro` y `plantilla`. Renombra en su misma carpeta.
   - `borrar` → requiere `filtro` y `confirmar`. Borra; **siempre pide confirmación salvo `--si`**.
   - `transformar` → requiere `origen`, `filtro` y `destino`. Escribe un HTML por fichero.
   - `comprimir` → requiere `origen`, `filtro` y `destino`. Crea un .zip con los elegidos.
-  - No existe `copiar` (aparecía en versiones antiguas de esta skill; no lo añadas sin implementarlo).
 - `confirmar` (bool, opcional): si es true, la CLI pregunta antes de ejecutar. En `borrar` se pregunta siempre.
 - filtro opcional: extensiones (lista, en minúsculas), patron (regex válida), mas_antiguo_que_dias, mayor_que_mb.
   - `mas_antiguo_que_dias` y `mayor_que_mb` tienen que ser números > 0.
@@ -23,9 +23,12 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
 ## Órdenes relacionadas
 - `tareas validar [FICHERO]` → comprueba el JSON; errores con código de salida 3.
 - `tareas acciones [NOMBRE]` → lista todas o muestra el detalle de una.
-- `tareas ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA]` → ejecuta.
+- `tareas ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA] [--destino RUTA] [--antiguedad N]` → ejecuta.
   - La posición 2: si el tipo es `abrir`, es la URL (tiene que empezar por http/https); para el
     resto de tipos es la carpeta de origen. Indicarla en los dos sitios a la vez es error.
+  - `--destino`/`-d RUTA` sobreescribe el `destino` del JSON (comprimir, copiar, mover, transformar).
+  - `--antiguedad`/`-an N` sobreescribe `filtro.mas_antiguo_que_dias` del JSON (por defecto el del fichero).
+  - `comprimir` y `copiar` también eligen **carpetas** (los filtros de extensión/patrón solo aplican a ficheros).
   - `--simular` no toca nada y **no pregunta**.
   - `--si` salta la confirmación (imprescindible para borrar sin interacción).
   - La ruta puede ser relativa, absoluta o `~`; se expande con `expanduser` (igual en Windows y Linux).

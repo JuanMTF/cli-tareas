@@ -51,7 +51,7 @@
       "descripcion": "transforma los Ficheros Pdf en Html, para Visualizar en el navegador .",
       "tipo": "transformar",
       "origen": "~/Descargas/pdf",
-      "filtro": { "extensiones": [".pdf", ".docx", ".exe", ".zip", ".jpg"] },
+      "filtro": { "extensiones": [".pdf"] },
       "destino": "~/Descargas/HTMLtransformados",
       "confirmar": true
     },
@@ -62,6 +62,14 @@
       "origen": "~/Descargas",
       "filtro": { "extensiones": [".pdf", ".docx", ".zip", ".rar", ".jpg", ".jpeg"], "mas_antiguo_que_dias": 400 },
       "destino": "~/Documentos/PDF"
+    },
+    {
+      "nombre": "copiar-antiguos",
+      "descripcion": "Copia las carpetas viejas mas de 400 dias sin borrar el original",
+      "tipo": "copiar",
+      "origen": "~/Descargas",
+      "filtro": { "extensiones": [".pdf", ".docx", ".zip", ".rar", ".jpg", ".jpeg"], "mas_antiguo_que_dias": 400 },
+      "destino": "~/Documentos/PDFcopias"
     }
   ]
 }

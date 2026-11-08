@@ -15,12 +15,18 @@ from tareas.errores import TareasError
 class Motor:
     """Ejecuta las acciones del fichero: las busca, selecciona y ejecuta."""
 
+    # Acciones que archivan (comprimir, copiar): admite «carpetas» como origen,
+    # no solo ficheros sueltos. Mover/borrar/renombrar se aplican a ficheros.
+    TIPOS_CON_CARPETAS = ("comprimir", "copiar")
+
     def __init__(self, acciones: list[dict[str, Any]]) -> None:
         self.acciones = {a["nombre"]: Accion.desde_config(a) for a in acciones}
 
     @staticmethod
-    def seleccionar(carpeta: Path, filtro: dict[str, Any]) -> list[Path]:
-        """Devuelve los ficheros de la carpeta que cumplen el filtro."""
+    def seleccionar(
+        carpeta: Path, filtro: dict[str, Any], incluye_carpetas: bool = False
+    ) -> list[Path]:
+        """Devuelve los ficheros (y carpetas, si se pide) que cumplen el filtro."""
         exts = {e.lower() for e in filtro.get("extensiones", [])}
         patron = re.compile(filtro["patron"]) if "patron" in filtro else None
         dias = filtro.get("mas_antiguo_que_dias")
@@ -28,12 +34,13 @@ class Motor:
         ahora = time.time()
         elegidos = []
         for f in sorted(carpeta.iterdir()):
-            if not f.is_file():
+            if not incluye_carpetas and not f.is_file():
                 continue
-            if exts and f.suffix.lower() not in exts:
-                continue
-            if patron and not patron.search(f.name):
-                continue
+            if f.is_file():
+                if exts and f.suffix.lower() not in exts:
+                    continue
+                if patron and not patron.search(f.name):
+                    continue
             if dias and ahora - f.stat().st_mtime < dias * 86400:
                 continue
             if mb and f.stat().st_size < mb * 1024 * 1024:
@@ -50,6 +57,8 @@ class Motor:
         navegador: str | None = None,
         ruta_navegador: str | None = None,
         abrir: Callable[[list[str]], None] | None = None,
+        antiguedad: int | None = None,
+        destino: Path | None = None,
     ) -> list[Resultado]:
         """Ejecuta una acción y devuelve la lista de resultados.
 
@@ -93,5 +102,13 @@ class Motor:
                 f"Crea la carpeta o indica otra con --carpeta RUTA (admite ~)."
             )
 
-        ficheros = self.seleccionar(carpeta_ejecucion, accion.config.get("filtro", {}))
-        return accion.ejecutar(ficheros, simular, urls, abrir=abrir)
+        filtro = dict(accion.config.get("filtro") or {})
+        if antiguedad is not None:
+            # La opción de la CLI manda sobre el valor del fichero («mas_antiguo_que_dias»).
+            filtro["mas_antiguo_que_dias"] = antiguedad
+        ficheros = self.seleccionar(
+            carpeta_ejecucion,
+            filtro,
+            incluye_carpetas=tipo in self.TIPOS_CON_CARPETAS,
+        )
+        return accion.ejecutar(ficheros, simular, urls, abrir, destino)

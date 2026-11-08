@@ -8,6 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, NoReturn
 
+from tareas import traduccion
+
+# Antes que typer, para que sus rótulos, su ayuda y sus errores salgan en
+# español (ver traduccion.py).
+traduccion.instalar()
+
 import typer
 from rich.console import Console
 from rich.markup import escape
@@ -289,6 +295,22 @@ def ejecutar(
             help="No pregunta: acepta la confirmación (para borrar y las que tengan 'confirmar').",
         ),
     ] = False,
+    antiguedad: Annotated[
+        int | None,
+        typer.Option(
+            "--antiguedad",
+            "-an",
+            help="Comprime los ficheros más antiguos de N días (por defecto, el del fichero).",
+        ),
+    ] = None,
+    destino: Annotated[
+        str | None,
+        typer.Option(
+            "--destino",
+            "-d",
+            help="Carpeta de destino (sobreescribe 'destino' del fichero de acciones). Admite ~.",
+        ),
+    ] = None,
 ) -> None:
     """Ejecuta una de las acciones definidas en el fichero de acciones."""
     pedidos = [
@@ -303,7 +325,7 @@ def ejecutar(
     if len(pedidos) > 1:
         _error("Elige un solo navegador: -g (Chrome), -f (Firefox) o -e (Edge).")
     navegador = pedidos[0] if pedidos else None
-    destino = NAVEGADORES[navegador] if navegador else "el explorador por defecto"
+    destino_navegador = NAVEGADORES[navegador] if navegador else "el explorador por defecto"
     ruta_navegador = buscar_navegador(navegador) if navegador else None
 
     try:
@@ -362,6 +384,8 @@ def ejecutar(
                 urls=([url] if url is not None else None),
                 navegador=navegador,
                 ruta_navegador=str(ruta_navegador) if ruta_navegador else None,
+                antiguedad=antiguedad,
+                destino=Path(destino).expanduser() if destino else None,
             )
         except TareasError as exc:
             _error(str(exc), codigo=exc.codigo_salida)
@@ -379,7 +403,7 @@ def ejecutar(
             )
             pestañas = "1 pestaña" if len(urls_efectivas) == 1 else f"{len(urls_efectivas)} pestañas"
             if accion.config.get("confirmar", False):
-                typer.confirm(f"¿Abrir {destino} con {pestañas}?", abort=True)
+                typer.confirm(f"¿Abrir {destino_navegador} con {pestañas}?", abort=True)
         else:
             # Borrar siempre pide confirmación; el resto, solo si «confirmar» es true.
             if tipo == "borrar" or accion.config.get("confirmar", False):
@@ -394,10 +418,12 @@ def ejecutar(
             navegador=navegador,
             ruta_navegador=str(ruta_navegador) if ruta_navegador else None,
             abrir=(
-                (lambda urls_a: abrir_en_navegador(navegador, urls_a))
+                (lambda urls_a: abrir_en_navegador(navegador, urls_a, ruta_navegador))
                 if navegador
                 else (lambda urls_a: abrir_por_defecto(urls_a))
             ),
+            antiguedad=antiguedad,
+            destino=Path(destino).expanduser() if destino else None,
         )
     except TareasError as exc:
         _error(str(exc), codigo=exc.codigo_salida)

@@ -16,7 +16,8 @@ VERSION_ESPERADA = 1
 RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
-TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar", "comprimir")
+TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
+                   "comprimir", "copiar")
 
 # Campos que puede llevar cualquier acción.
 CAMPOS_COMUNES = ("nombre", "descripcion", "tipo", "confirmar")
@@ -29,6 +30,7 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     "abrir": ("urls",),
     "transformar": ("origen", "filtro", "destino"),
     "comprimir": ("origen", "filtro", "destino"),
+    "copiar": ("origen", "filtro", "destino"),
 }
 
 # Campos que se reconocen dentro de 'filtro'.

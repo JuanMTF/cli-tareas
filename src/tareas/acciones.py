@@ -1,7 +1,7 @@
-"""Acciones del fichero acciones.json: carga, validación y ejecución.
+"""Acciones del fichero acciones.json: validación y ejecución.
 
-Aquí NO hay órdenes de terminal (eso está en cli.py): solo leer el JSON,
-comprobar que está bien escrito y lanzar el navegador para tipo "abrir".
+Aquí NO hay órdenes de terminal (eso está en cli.py): solo comprobar que
+las acciones están bien escritas y lanzar el navegador para tipo "abrir".
 """
 
 from __future__ import annotations
@@ -85,14 +85,40 @@ class Resultado:
 
 
 class Accion:
-    """Acción resuelta desde su configuración de acciones.json."""
+    """Acción resuelta desde su configuración de acciones.json.
+
+    El «tipo» no se decide con if/elif repartido por el código: cada tipo tiene
+    su subclase registrada en REGISTRO y la fábrica Accion.desde_config crea la
+    que toca. Añadir un tipo nuevo = crear subclase + registrar.
+    """
+
+    # Registro de subclases por tipo: «abrir» -> Abrir, «copiar» -> Copiar, ...
+    REGISTRO: dict[str, type[Accion]] = {}
 
     def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
 
-    @staticmethod
-    def desde_config(config: dict[str, Any]) -> "Accion":
-        return Accion(config)
+    @classmethod
+    def desde_config(cls, config: dict[str, Any]) -> "Accion":
+        """Fábrica: instancia la subclase registrada para el campo «tipo»."""
+        subclase = cls.REGISTRO.get(config.get("tipo") or "")
+        if subclase is None:
+            raise TareasError(
+                f"La acción «{config.get('nombre')}» tiene el tipo «{config.get('tipo')}» "
+                f"que todavía no está implementado."
+            )
+        return subclase(config)
+
+    @classmethod
+    def registrar(cls, tipo: str) -> Callable[[type[Accion]], type[Accion]]:
+        """Registra la subclase que se encargará de un tipo concreto."""
+
+        def decorador(subclase: type[Accion]) -> type[Accion]:
+            subclase.TIPO = tipo  # type: ignore[attr-defined]
+            cls.REGISTRO[tipo] = subclase
+            return subclase
+
+        return decorador
 
     def ejecutar(
         self,
@@ -100,25 +126,16 @@ class Accion:
         simular: bool,
         urls: list[str] | None = None,
         abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
     ) -> list[Resultado]:
         """Ejecuta la acción sobre los ficheros elegidos (o abre las URLs si es abrir)."""
-        tipo = self.config.get("tipo")
-        if tipo == "abrir":
-            return self._ejecutar_abrir(simular, urls, abrir)
-        if tipo == "mover":
-            return self._mover(ficheros, simular)
-        if tipo == "renombrar":
-            return self._renombrar(ficheros, simular)
-        if tipo == "borrar":
-            return self._borrar(ficheros, simular)
-        if tipo == "transformar":
-            return self._transformar(ficheros, simular)
-        if tipo == "comprimir":
-            return self._comprimir(ficheros, simular)
-        raise TareasError(
-            f"La acción «{self.config.get('nombre')}» es de tipo «{tipo}» "
-            f"y todavía no está implementado (solo «abrir»)."
-        )
+        subclase = self.REGISTRO.get(self.config.get("tipo") or "")
+        if subclase is None:
+            raise TareasError(
+                f"La acción «{self.config.get('nombre')}» tiene el tipo «{self.config.get('tipo')}» "
+                f"que todavía no está implementado."
+            )
+        return subclase(self.config).ejecutar(ficheros, simular, urls, abrir, destino)
 
     def _destino(self) -> Path:
         """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino)."""
@@ -128,141 +145,25 @@ class Accion:
         """Carpeta origen expandiendo ~."""
         return Path(self.config.get("origen") or ".").expanduser()
 
-    def _mover(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
-        """Mueve cada fichero al destino, sin sobrescribir nunca."""
-        destino = self._destino()
-        if not ficheros:
-            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
-        if not simular:
-            destino.mkdir(parents=True, exist_ok=True)
-        resultados: list[Resultado] = []
-        for fichero in ficheros:
-            libre = destino_libre(destino / fichero.name)
-            if simular:
-                resultados.append(
-                    Resultado(
-                        True,
-                        f"SIMULACIÓN: movería «{fichero.name}» → «{libre}»",
-                    )
-                )
-            else:
-                shutil.move(str(fichero), str(libre))
-                resultados.append(
-                    Resultado(True, f"Movido: «{fichero.name}» → «{libre}»")
-                )
-        return resultados
+    def _resultados_vacio(self) -> list[Resultado]:
+        """Aviso de éxito cuando ningún fichero cumple el filtro."""
+        return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
 
-    def _renombrar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
-        """Renombra cada fichero con la plantilla, sin sobrescribir nunca."""
-        plantilla = self.config.get("plantilla", "{nombre}{ext}")
-        if not ficheros:
-            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
-        resultados: list[Resultado] = []
-        for indice, fichero in enumerate(ficheros, start=1):
-            fecha = datetime.fromtimestamp(fichero.stat().st_mtime)
-            nuevo_nombre = aplicar_plantilla(plantilla, fichero, indice, fecha)
-            destino = destino_libre(fichero.with_name(nuevo_nombre))
-            if simular:
-                resultados.append(
-                    Resultado(
-                        True,
-                        f"SIMULACIÓN: renombraría «{fichero.name}» → «{destino.name}»",
-                    )
-                )
-            else:
-                fichero.rename(destino)
-                resultados.append(
-                    Resultado(
-                        True, f"Renombrado: «{fichero.name}» → «{destino.name}»"
-                    )
-                )
-        return resultados
 
-    def _borrar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
-        """Borra cada fichero (la confirmación la pide la CLI)."""
-        if not ficheros:
-            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
-        resultados: list[Resultado] = []
-        for fichero in ficheros:
-            if simular:
-                resultados.append(
-                    Resultado(True, f"SIMULACIÓN: borraría «{fichero.name}»")
-                )
-            else:
-                fichero.unlink()
-                resultados.append(Resultado(True, f"Borrado: «{fichero.name}»"))
-        return resultados
+@Accion.registrar("abrir")
+class Abrir(Accion):
+    """Abre las URLs de la acción en el navegador (o describe la simulación)."""
 
-    def _transformar(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
-        """Genera un HTML por fichero que lo incrusta/abre en el navegador."""
-        destino = self._destino()
-        if not ficheros:
-            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
-        if not simular:
-            destino.mkdir(parents=True, exist_ok=True)
-        resultados: list[Resultado] = []
-        for fichero in ficheros:
-            salida = destino_libre(destino / f"{fichero.stem}.html")
-            if simular:
-                resultados.append(
-                    Resultado(
-                        True,
-                        f"SIMULACIÓN: generaría «{salida.name}» para «{fichero.name}»",
-                    )
-                )
-            else:
-                uri = fichero.resolve().as_uri()
-                html = (
-                    "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n"
-                    "  <meta charset=\"UTF-8\">\n"
-                    f"  <title>{fichero.name}</title>\n"
-                    "</head>\n<body>\n"
-                    f"  <h1>{fichero.name}</h1>\n"
-                    f"  <iframe src=\"{uri}\" width=\"100%\" height=\"90vh\"></iframe>\n"
-                    f"  <p><a href=\"{uri}\">Abrir el original</a></p>\n"
-                    "</body>\n</html>\n"
-                )
-                salida.write_text(html, encoding="utf-8")
-                resultados.append(
-                    Resultado(
-                        True,
-                        f"Transformado: «{fichero.name}» → «{salida.name}»",
-                    )
-                )
-        return resultados
-
-    def _comprimir(self, ficheros: list[Path], simular: bool) -> list[Resultado]:
-        """Comprime los ficheros en un .zip en el destino, sin sobrescribir."""
-        destino = self._destino()
-        if not ficheros:
-            return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
-        nombre_zip = destino / f"{self.config.get('nombre', 'tareas')}.zip"
-        libre = destino_libre(nombre_zip)
-        if simular:
-            return [
-                Resultado(
-                    True,
-                    f"SIMULACIÓN: comprimiría {len(ficheros)} fichero(s) en «{libre}»",
-                )
-            ]
-        destino.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(libre, "w", zipfile.ZIP_DEFLATED) as archivo:
-            for fichero in ficheros:
-                archivo.write(fichero, arcname=fichero.name)
-        return [
-            Resultado(
-                True,
-                f"Comprimido: {len(ficheros)} fichero(s) → «{libre}»",
-            )
-        ]
-
-    def _ejecutar_abrir(
+    def ejecutar(
         self,
+        ficheros: list[Path],
         simular: bool,
-        urls: list[str] | None,
-        abrir: Callable[[list[str]], None] | None,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
     ) -> list[Resultado]:
-        urls_efectivas = list(urls or self.config.get("urls") or [])
+        """Abre las URLs (o describe la simulación) cuando la acción es «abrir»."""
+        urls_efectivas = list(urls) if urls else list(self.config.get("urls") or [])
         if simular:
             return [
                 Resultado(
@@ -278,6 +179,210 @@ class Accion:
         except OSError as exc:
             raise TareasError(f"No se pudo abrir el navegador: {exc}") from exc
         return [Resultado(True, f"Navegador abierto con {len(urls_efectivas)} URL(s).")]
+
+
+@Accion.registrar("copiar")
+class Copiar(Accion):
+    """Copia los ficheros elegidos al destino, sin borrar el original."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        """Copia los ficheros al destino (el original se queda en la carpeta de origen)."""
+        destino_final = destino if destino is not None else self._destino()
+        if not ficheros:
+            return self._resultados_vacio()
+        if not simular:
+            destino_final.mkdir(parents=True, exist_ok=True)
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            libre = destino_libre(destino_final / fichero.name)
+            if simular:
+                resultados.append(
+                    Resultado(True, f"SIMULACIÓN: copiaría «{fichero.name}» → «{libre}»")
+                )
+            elif fichero.is_dir():
+                shutil.copytree(fichero, libre, dirs_exist_ok=True)
+                resultados.append(Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»"))
+            else:
+                shutil.copy2(str(fichero), str(libre))
+                resultados.append(Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»"))
+        return resultados
+
+
+@Accion.registrar("mover")
+class Mover(Accion):
+    """Mueve los ficheros elegidos al destino, sin sobrescribir nunca."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        destino_final = destino if destino is not None else self._destino()
+        if not ficheros:
+            return self._resultados_vacio()
+        if not simular:
+            destino_final.mkdir(parents=True, exist_ok=True)
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            libre = destino_libre(destino_final / fichero.name)
+            if simular:
+                resultados.append(
+                    Resultado(True, f"SIMULACIÓN: movería «{fichero.name}» → «{libre}»")
+                )
+            else:
+                shutil.move(str(fichero), str(libre))
+                resultados.append(Resultado(True, f"Movido: «{fichero.name}» → «{libre}»"))
+        return resultados
+
+
+@Accion.registrar("renombrar")
+class Renombrar(Accion):
+    """Renombra cada fichero con la plantilla, sin sobrescribir nunca."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        plantilla = self.config.get("plantilla", "{nombre}{ext}")
+        if not ficheros:
+            return self._resultados_vacio()
+        resultados: list[Resultado] = []
+        for indice, fichero in enumerate(ficheros, start=1):
+            fecha = datetime.fromtimestamp(fichero.stat().st_mtime)
+            nuevo_nombre = aplicar_plantilla(plantilla, fichero, indice, fecha)
+            destino = destino_libre(fichero.with_name(nuevo_nombre))
+            if simular:
+                resultados.append(
+                    Resultado(True, f"SIMULACIÓN: renombraría «{fichero.name}» → «{destino.name}»")
+                )
+            else:
+                fichero.rename(destino)
+                resultados.append(Resultado(True, f"Renombrado: «{fichero.name}» → «{destino.name}»"))
+        return resultados
+
+
+@Accion.registrar("borrar")
+class Borrar(Accion):
+    """Borra cada fichero (la confirmación la pide la CLI)."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        if not ficheros:
+            return self._resultados_vacio()
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            if simular:
+                resultados.append(Resultado(True, f"SIMULACIÓN: borraría «{fichero.name}»"))
+            else:
+                fichero.unlink()
+                resultados.append(Resultado(True, f"Borrado: «{fichero.name}»"))
+        return resultados
+
+
+@Accion.registrar("transformar")
+class Transformar(Accion):
+    """Genera un HTML por fichero que lo incrusta/abre en el navegador."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        destino_final = destino if destino is not None else self._destino()
+        if not ficheros:
+            return self._resultados_vacio()
+        if not simular:
+            destino_final.mkdir(parents=True, exist_ok=True)
+        resultados: list[Resultado] = []
+        for fichero in ficheros:
+            salida = destino_libre(destino_final / f"{fichero.stem}.html")
+            if simular:
+                resultados.append(
+                    Resultado(True, f"SIMULACIÓN: generaría «{salida.name}» para «{fichero.name}»")
+                )
+            else:
+                uri = fichero.resolve().as_uri()
+                html = (
+                    "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n"
+                    "  <meta charset=\"UTF-8\">\n"
+                    f"  <title>{fichero.name}</title>\n"
+                    "</head>\n<body>\n"
+                    f"  <h1>{fichero.name}</h1>\n"
+                    f"  <iframe src=\"{uri}\" width=\"100%\" height=\"90vh\"></iframe>\n"
+                    f"  <p><a href=\"{uri}\">Abrir el original</a></p>\n"
+                    "</body>\n</html>\n"
+                )
+                salida.write_text(html, encoding="utf-8")
+                resultados.append(
+                    Resultado(True, f"Transformado: «{fichero.name}» → «{salida.name}»")
+                )
+        return resultados
+
+
+@Accion.registrar("comprimir")
+class Comprimir(Accion):
+    """Comprime los ficheros en un .zip en el destino, sin sobrescribir."""
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        destino_final = destino if destino is not None else self._destino()
+        if not ficheros:
+            return self._resultados_vacio()
+        nombre_zip = destino_final / f"{self.config.get('nombre', 'tareas')}.zip"
+        libre = destino_libre(nombre_zip)
+        if simular:
+            nombrados = ", ".join(f"«{fichero.name}»" for fichero in ficheros)
+            return [
+                Resultado(
+                    True,
+                    f"SIMULACIÓN: comprimiría {len(ficheros)} fichero(s) en «{libre}»: {nombrados}",
+                )
+            ]
+        destino_final.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(libre, "w", zipfile.ZIP_DEFLATED) as archivo:
+            for fichero in ficheros:
+                if fichero.is_dir():
+                    # Una carpeta seleccionada: se comprime su contenido entero.
+                    for contenido in sorted(fichero.rglob("*")):
+                        if contenido.is_file():
+                            archivo.write(contenido, arcname=contenido.relative_to(fichero.parent))
+                else:
+                    archivo.write(fichero, arcname=fichero.name)
+        return [
+            Resultado(
+                True,
+                f"Comprimido: {len(ficheros)} fichero(s) → «{libre}»",
+            )
+        ]
 
 
 class ErrorConfiguracion(Exception):
@@ -425,12 +530,25 @@ def buscar_navegador(clave: str) -> Path | None:
     return buscador()
 
 
-def abrir_en_navegador(clave: str, urls: list[str]) -> None:
+def abrir_en_navegador(
+    clave: str, urls: list[str], ruta: Path | None = None
+) -> None:
     """Abre 1 ventana nueva del navegador indicado con todas las URLs como pestañas.
 
     Se usa el módulo estándar webbrowser: sin subprocess y sin shell=True, que es
     la norma del proyecto.
+
+    webbrowser.open() abre el explorador POR DEFECTO, así que antes hay que
+    registrar el ejecutable del navegador pedido (-e edge, -g chrome, -f firefox)
+    y pedir ese. Si no se hace, la opción elegida no se respeta y se abre el
+    por defecto (Google Chrome) aunque se pidiera Edge.
     """
+    ejecutable = ruta if ruta is not None else buscar_navegador(clave)
+    if ejecutable is None:
+        raise TareasError(f"No se encontró {NAVEGADORES[clave]} en este equipo.")
+    webbrowser.register(
+        clave, None, webbrowser.BackgroundBrowser(str(ejecutable)), preferred=True
+    )
     for url in urls:
         webbrowser.open(url, new=1)
 
