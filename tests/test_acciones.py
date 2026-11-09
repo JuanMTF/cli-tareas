@@ -171,6 +171,31 @@ def test_comprimir_sin_origen_es_error() -> None:
     assert any("origen" in error for error in errores)
 
 
+def test_copiar_es_un_tipo_conocido() -> None:
+    accion = {
+        "nombre": "copiar-antiguos",
+        "descripcion": "Copia lo viejo",
+        "tipo": "copiar",
+        "origen": "~/Descargas",
+        "filtro": { "extensiones": [".pdf"], "mas_antiguo_que_dias": 400 },
+        "destino": "~/Documentos/PDFcopias",
+    }
+    errores, _ = validar_acciones([accion])
+    assert errores == []
+
+
+def test_copiar_sin_origen_es_error() -> None:
+    accion = {
+        "nombre": "copiar-antiguos",
+        "descripcion": "Copia lo viejo",
+        "tipo": "copiar",
+        "filtro": { "extensiones": [".pdf"] },
+        "destino": "~/Documentos/PDFcopias",
+    }
+    errores, _ = validar_acciones([accion])
+    assert any("origen" in error for error in errores)
+
+
 def test_mas_antiguo_que_dias_no_numerico_es_error() -> None:
     accion = _abrir()
     accion["tipo"] = "comprimir"
@@ -190,3 +215,31 @@ def test_errata_en_el_filtro_es_aviso() -> None:
     errores, avisos = validar_acciones([accion])
     assert errores == []
     assert any("mas_antiguio_que_dias" in aviso for aviso in avisos)
+
+
+def test_mayor_que_mb_es_un_filtro_reconocido() -> None:
+    """mayor_que_mb lo usa motor.py: no debe salir como «no reconocido»."""
+    accion = {
+        "nombre": "grandes",
+        "descripcion": "Ficheros grandes",
+        "tipo": "comprimir",
+        "origen": "~/Descargas",
+        "filtro": { "extensiones": [".zip"], "mayor_que_mb": 100 },
+        "destino": "~/nada",
+    }
+    errores, avisos = validar_acciones([accion])
+    assert errores == []
+    assert not any("mayor_que_mb" in aviso for aviso in avisos)
+
+
+def test_mayor_que_mb_no_positivo_es_error() -> None:
+    accion = {
+        "nombre": "grandes",
+        "descripcion": "Ficheros grandes",
+        "tipo": "comprimir",
+        "origen": "~/Descargas",
+        "filtro": { "extensiones": [".zip"], "mayor_que_mb": 0 },
+        "destino": "~/nada",
+    }
+    errores, _ = validar_acciones([accion])
+    assert any("mayor_que_mb" in error for error in errores)

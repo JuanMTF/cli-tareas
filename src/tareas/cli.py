@@ -21,6 +21,7 @@ from rich.table import Table
 
 import tareas
 from tareas import config
+from tareas import html as mod_html
 from tareas.acciones import (
     ErrorConfiguracion,
     NAVEGADORES,
@@ -246,6 +247,65 @@ def validar(
     consola.print(f"[green]✔ {len(acciones)} acciones válidas[/green]")
 
 
+def _destino_transformar() -> Path | None:
+    """Destino por defecto de «indexar»: el de la acción transformar del JSON."""
+    try:
+        acciones = config.cargar(RUTA_ACCIONES)
+    except TareasError:
+        return None
+    for accion in acciones:
+        if accion.get("tipo") == "transformar" and accion.get("destino"):
+            return Path(str(accion["destino"])).expanduser()
+    return None
+
+
+@app.command()
+def indexar(
+    carpeta: Annotated[
+        str,
+        typer.Argument(
+            help="Carpeta con los PDF a revisar (ej.: C:\\Users\\x\\Downloads\\DAM). Admite ~."
+        ),
+    ],
+    destino: Annotated[
+        str | None,
+        typer.Option(
+            "--destino",
+            "-d",
+            help="Carpeta donde están los manuales convertidos. Por defecto, la del JSON.",
+        ),
+    ] = None,
+    simular: Annotated[
+        bool,
+        typer.Option(
+            "--simular",
+            help="Solo muestra qué haría: no convierte ni escribe nada.",
+        ),
+    ] = False,
+) -> None:
+    """Revisa una carpeta de PDF: convierte solo los que falten y actualiza manuales.json.
+
+    Lo ya convertido no se toca: solo se añaden los PDF nuevos al JSON y a la
+    galería (index.html).
+    """
+    origen = Path(carpeta).expanduser()
+    destino_final = Path(destino).expanduser() if destino else _destino_transformar()
+    if destino_final is None:
+        _error(
+            "No hay ninguna acción «transformar» con destino en el fichero de acciones: "
+            "indica uno con --destino RUTA.",
+            codigo=3,
+        )
+
+    try:
+        mensajes = mod_html.indexar(origen, destino_final, simular=simular)
+    except TareasError as exc:
+        _error(str(exc), codigo=exc.codigo_salida)
+
+    for mensaje in mensajes:
+        typer.echo(mensaje)
+
+
 @app.command()
 def ejecutar(
     nombre: Annotated[
@@ -285,7 +345,7 @@ def ejecutar(
         typer.Option(
             "--carpeta",
             "-c",
-            help="Carpeta de origen (sobreescribe 'origen' del fichero de acciones). Admite ~.",
+            help="Carpeta de origen; tiene prioridad sobre la del fichero de acciones. Admite ~.",
         ),
     ] = None,
     si: Annotated[
@@ -300,7 +360,11 @@ def ejecutar(
         typer.Option(
             "--antiguedad",
             "-an",
-            help="Comprime los ficheros más antiguos de N días (por defecto, el del fichero).",
+            "-n",
+            help=(
+                "Días de antigüedad mínima: solo lo más viejo que N días; "
+                "tiene prioridad sobre el del fichero (400 por defecto)."
+            ),
         ),
     ] = None,
     destino: Annotated[
@@ -308,7 +372,15 @@ def ejecutar(
         typer.Option(
             "--destino",
             "-d",
-            help="Carpeta de destino (sobreescribe 'destino' del fichero de acciones). Admite ~.",
+            help="Carpeta de destino; tiene prioridad sobre la del fichero de acciones. Admite ~.",
+        ),
+    ] = None,
+    nombre_zip: Annotated[
+        str | None,
+        typer.Option(
+            "--nombre",
+            "-N",
+            help="Nombre del .zip que crea «comprimir» (por defecto, el de la carpeta origen).",
         ),
     ] = None,
 ) -> None:
@@ -386,6 +458,7 @@ def ejecutar(
                 ruta_navegador=str(ruta_navegador) if ruta_navegador else None,
                 antiguedad=antiguedad,
                 destino=Path(destino).expanduser() if destino else None,
+                nombre_zip=nombre_zip,
             )
         except TareasError as exc:
             _error(str(exc), codigo=exc.codigo_salida)
@@ -424,6 +497,7 @@ def ejecutar(
             ),
             antiguedad=antiguedad,
             destino=Path(destino).expanduser() if destino else None,
+            nombre_zip=nombre_zip,
         )
     except TareasError as exc:
         _error(str(exc), codigo=exc.codigo_salida)

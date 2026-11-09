@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tareas import config as mod_config
+from tareas import html as mod_html
 from tareas.errores import TareasError
 
 # Fichero de configuración. Ruta absoluta (dentro del paquete): sirve desde cualquier carpeta.
@@ -74,6 +75,25 @@ def aplicar_plantilla(plantilla: str, fichero: Path, n: int, fecha: datetime) ->
         return match.group(0)
 
     return _HUECO.sub(_sustituir, plantilla)
+
+
+def describir_filtro(filtro: dict[str, Any]) -> str:
+    """El filtro explicado en palabras normales, para el mensaje de «no hay ficheros».
+
+    Así se ve de un vistazo por qué no se ha elegido nada («más antiguos que
+    400 días», «solo .pdf», etc.).
+    """
+    partes: list[str] = []
+    extensiones = filtro.get("extensiones") or []
+    if extensiones:
+        partes.append("extensiones " + ", ".join(str(e) for e in extensiones))
+    if filtro.get("patron"):
+        partes.append(f"nombre como «{filtro['patron']}»")
+    if filtro.get("mas_antiguo_que_dias"):
+        partes.append(f"más antiguos que {filtro['mas_antiguo_que_dias']} días")
+    if filtro.get("mayor_que_mb"):
+        partes.append(f"más grandes que {filtro['mayor_que_mb']} MB")
+    return "; ".join(partes)
 
 
 class Resultado:
@@ -146,7 +166,15 @@ class Accion:
         return Path(self.config.get("origen") or ".").expanduser()
 
     def _resultados_vacio(self) -> list[Resultado]:
-        """Aviso de éxito cuando ningún fichero cumple el filtro."""
+        """Aviso de éxito cuando ningún fichero cumple el filtro (diciendo cuál es)."""
+        detalle = describir_filtro(self.config.get("filtro") or {})
+        if detalle:
+            return [
+                Resultado(
+                    True,
+                    f"No hay ficheros que cumplan el filtro ({detalle}).",
+                )
+            ]
         return [Resultado(True, "No hay ficheros que cumplan el filtro.")]
 
 
@@ -201,17 +229,27 @@ class Copiar(Accion):
             destino_final.mkdir(parents=True, exist_ok=True)
         resultados: list[Resultado] = []
         for fichero in ficheros:
-            libre = destino_libre(destino_final / fichero.name)
+            original = destino_final / fichero.name
+            libre = destino_libre(original)
+            # Nunca se pisa: si ya hay algo con ese nombre, se renombra con « (1)».
+            nota = " (ya existía: renombrado)" if libre != original else ""
             if simular:
                 resultados.append(
-                    Resultado(True, f"SIMULACIÓN: copiaría «{fichero.name}» → «{libre}»")
+                    Resultado(
+                        True,
+                        f"SIMULACIÓN: copiaría «{fichero.name}» → «{libre}»{nota}",
+                    )
                 )
             elif fichero.is_dir():
                 shutil.copytree(fichero, libre, dirs_exist_ok=True)
-                resultados.append(Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»"))
+                resultados.append(
+                    Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»{nota}")
+                )
             else:
                 shutil.copy2(str(fichero), str(libre))
-                resultados.append(Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»"))
+                resultados.append(
+                    Resultado(True, f"Copiado: «{fichero.name}» → «{libre}»{nota}")
+                )
         return resultados
 
 
@@ -301,7 +339,11 @@ class Borrar(Accion):
 
 @Accion.registrar("transformar")
 class Transformar(Accion):
-    """Genera un HTML por fichero que lo incrusta/abre en el navegador."""
+    """Convierte cada PDF en una carpeta con su index.html y sus páginas en imagen.
+
+    En el destino se dejan compartidos estilos.css, script.js, manuales.json y
+    el index.html que lista todos los manuales (ver tareas.html).
+    """
 
     def ejecutar(
         self,
@@ -314,37 +356,50 @@ class Transformar(Accion):
         destino_final = destino if destino is not None else self._destino()
         if not ficheros:
             return self._resultados_vacio()
-        if not simular:
-            destino_final.mkdir(parents=True, exist_ok=True)
+        if simular:
+            return [
+                Resultado(
+                    True,
+                    f"SIMULACIÓN: convertiría «{fichero.name}» → "
+                    f"«{fichero.stem}/{mod_html.NOMBRE_INDICE}»",
+                )
+                for fichero in ficheros
+            ]
+
+        destino_final.mkdir(parents=True, exist_ok=True)
+        mod_html.escribir_recursos(destino_final)
+        manuales = {
+            str(item.get("nombre", "")): item
+            for item in mod_html.leer_manuales(destino_final)
+        }
         resultados: list[Resultado] = []
         for fichero in ficheros:
-            salida = destino_libre(destino_final / f"{fichero.stem}.html")
-            if simular:
-                resultados.append(
-                    Resultado(True, f"SIMULACIÓN: generaría «{salida.name}» para «{fichero.name}»")
+            registro = mod_html.convertir_pdf(fichero, destino_final)
+            manuales[str(registro["nombre"])] = registro
+            resultados.append(
+                Resultado(
+                    True,
+                    f"Convertido: «{fichero.name}» → "
+                    f"«{registro['carpeta']}/{mod_html.NOMBRE_INDICE}» "
+                    f"({registro['paginas']} página(s))",
                 )
-            else:
-                uri = fichero.resolve().as_uri()
-                html = (
-                    "<!DOCTYPE html>\n<html lang=\"es\">\n<head>\n"
-                    "  <meta charset=\"UTF-8\">\n"
-                    f"  <title>{fichero.name}</title>\n"
-                    "</head>\n<body>\n"
-                    f"  <h1>{fichero.name}</h1>\n"
-                    f"  <iframe src=\"{uri}\" width=\"100%\" height=\"90vh\"></iframe>\n"
-                    f"  <p><a href=\"{uri}\">Abrir el original</a></p>\n"
-                    "</body>\n</html>\n"
-                )
-                salida.write_text(html, encoding="utf-8")
-                resultados.append(
-                    Resultado(True, f"Transformado: «{fichero.name}» → «{salida.name}»")
-                )
+            )
+        lista = list(manuales.values())
+        mod_html.guardar_manuales(destino_final, lista)
+        mod_html.escribir_galeria(destino_final, lista)
+        resultados.append(
+            Resultado(
+                True,
+                f"Índice actualizado: «{mod_html.NOMBRE_JSON}» y "
+                f"«{mod_html.NOMBRE_INDICE}» con {len(lista)} manual(es).",
+            )
+        )
         return resultados
 
 
 @Accion.registrar("comprimir")
 class Comprimir(Accion):
-    """Comprime los ficheros en un .zip en el destino, sin sobrescribir."""
+    """Comprime los ficheros y carpetas elegidos en un .zip, sin sobrescribir nunca."""
 
     def ejecutar(
         self,
@@ -357,14 +412,19 @@ class Comprimir(Accion):
         destino_final = destino if destino is not None else self._destino()
         if not ficheros:
             return self._resultados_vacio()
-        nombre_zip = destino_final / f"{self.config.get('nombre', 'tareas')}.zip"
-        libre = destino_libre(nombre_zip)
+        # El .zip se llama como la carpeta origen; si se pidió --nombre, manda ese
+        # (el motor lo deja en «nombre_zip» de la configuración solo para ejecutar).
+        nombre = str(self.config.get("nombre_zip") or ficheros[0].parent.name).strip()
+        nombre = nombre or str(self.config.get("nombre") or "tareas")
+        libre = destino_libre(destino_final / f"{nombre}.zip")
+        nota = " (ya existía: renombrado)" if libre.name != f"{nombre}.zip" else ""
         if simular:
             nombrados = ", ".join(f"«{fichero.name}»" for fichero in ficheros)
             return [
                 Resultado(
                     True,
-                    f"SIMULACIÓN: comprimiría {len(ficheros)} fichero(s) en «{libre}»: {nombrados}",
+                    f"SIMULACIÓN: comprimiría {len(ficheros)} fichero(s) en «{libre}»"
+                    f"{nota}: {nombrados}",
                 )
             ]
         destino_final.mkdir(parents=True, exist_ok=True)
@@ -380,7 +440,7 @@ class Comprimir(Accion):
         return [
             Resultado(
                 True,
-                f"Comprimido: {len(ficheros)} fichero(s) → «{libre}»",
+                f"Comprimido: {len(ficheros)} fichero(s) → «{libre}»{nota}",
             )
         ]
 

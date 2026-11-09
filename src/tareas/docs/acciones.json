@@ -48,7 +48,7 @@
     },
     {
       "nombre": "transformar-pdf-html",
-      "descripcion": "transforma los Ficheros Pdf en Html, para Visualizar en el navegador .",
+      "descripcion": "Convierte cada PDF en una carpeta con su HTML: paginas en imagen y texto buscable.",
       "tipo": "transformar",
       "origen": "~/Descargas/pdf",
       "filtro": { "extensiones": [".pdf"] },
@@ -57,18 +57,18 @@
     },
     {
       "nombre": "comprimir-antiguos",
-      "descripcion": "Comprime las carpetas viejas mas de 400 dias sin tocarse",
+      "descripcion": "Comprime en un .zip todo lo que tenga mas de 400 dias (cualquier fichero o carpeta)",
       "tipo": "comprimir",
       "origen": "~/Descargas",
-      "filtro": { "extensiones": [".pdf", ".docx", ".zip", ".rar", ".jpg", ".jpeg"], "mas_antiguo_que_dias": 400 },
+      "filtro": { "mas_antiguo_que_dias": 400 },
       "destino": "~/Documentos/PDF"
     },
     {
       "nombre": "copiar-antiguos",
-      "descripcion": "Copia las carpetas viejas mas de 400 dias sin borrar el original",
+      "descripcion": "Copia todo lo que tenga mas de 400 dias sin borrar el original (cualquier fichero o carpeta)",
       "tipo": "copiar",
       "origen": "~/Descargas",
-      "filtro": { "extensiones": [".pdf", ".docx", ".zip", ".rar", ".jpg", ".jpeg"], "mas_antiguo_que_dias": 400 },
+      "filtro": { "mas_antiguo_que_dias": 400 },
       "destino": "~/Documentos/PDFcopias"
     }
   ]

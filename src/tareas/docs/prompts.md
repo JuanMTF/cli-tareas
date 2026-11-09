@@ -282,4 +282,76 @@ PS C:\Manuales\Programar\Grado Superior\Semipresencial DAM\Programacion\Opencode
 
 la IA no es capaz de solucionarlo.
 
+##2026-11-06 al 08-11-2026
+### Prompt 1
+**Herramienta:** Flint 40B free, MiM0-V2.6-F1ash Free OpenCode
+
+**Prompt del plan (agente Build):** 
+
+   Errores encontrados en los test :
+1 Después de recuperar los fallos:
+.al ejecutar el auto completar solo va los comandos , se necesita que funcione con las opciones y las muestre. y bloquea el terminal ya no responde a los comandos se quedan en blaco y no van.
+. Al testear tareas ejecutar abrir-nav -e abre el google cuando debería abrir el edge. Antes estaba funcionando ok fue al cambiar el error de https:// que nos daba desde ahi dejo de abrir edge
+. Al comprimir-antiguos ¿ podemos cambiar el tiempo en menos días? 
+
+2 pruebas después de IA hacer retoques
+PS C:\Manuales> tareas.exe ejecutar comprimir-antiguos -an 10 ~/pruebas-tareas --simular
+No hay ficheros que cumplan el filtro.
+PS C:\Manuales> y si hay fiferos debería comprimir las carpetas y ficheros mas de 10 días en este caso y si no se pone nada debería ser ruta de defecto y 400 días.
+
+PS C:\Manuales> tareas.exe ejecutar copiar-amtiguos -an 10 ~/pruebas-tareas --simular
+No existe la acción: copiar-amtiguos. ¿Quisiste decir «copiar-antiguos»?
+PS C:\Manuales>                      
+y les falta opcional de directorio de salida par los dos comandos de comprimir y copiar 
+
+al ejecutar transformar-pdf a html no da error pero crea los ficheros.
+PS C:\WINDOWS\system32> tareas ejecutar transformar-pdf-html ~/documentos/pdf --simular
+SIMULACIÓN: generaría «[borrador].html» para «[borrador].pdf»
+SIMULACIÓN: generaría «apuntes-tema1.html» para «apuntes-tema1.pdf»
+SIMULACIÓN: generaría «contrato.html» para «contrato.docx»
+SIMULACIÓN: generaría «factura-octubre.html» para «factura-octubre.pdf»
+SIMULACIÓN: generaría «mi fichero con espacios.html» para «mi fichero con espacios.pdf»
+PS C:\WINDOWS\system32> tareas ejecutar transformar-pdf-html ~/documentos/pdf
+¿Ejecutar «transformar-pdf-html» (transformar)? [y/N]: y
+Transformado: «[borrador].pdf» → «[borrador].html»
+Transformado: «apuntes-tema1.pdf» → «apuntes-tema1.html»
+Transformado: «contrato.docx» → «contrato.html»
+Transformado: «factura-octubre.pdf» → «factura-octubre.html»
+Transformado: «mi fichero con espacios.pdf» → «mi fichero con espacios.html»
+PS C:\WINDOWS\system32>                                        
+
+**Qué corregí del plan:** Al hacer test he encontado que al hacer -- simular el cli no responde, y un fallo que Espera una ruta https: en los comandos de mover enviar, pienso que es debido a el comando de abrir-nav que ese si pide Http: . Tras varios copia y pega del error deja de funcionar el comando de abrir-nav y funciona ya los de mover o copiar ficheros. Se le vuelve a pegar el fallo y tras casi tres horas builg se queda colgado, Pruebo con otro Modelo con una sesion nueva y deja peor el programa tras varias horas pensado , Dejo recuperar la IA mimo y al volver a conectar ella sola ya se resuelve el fallo tras 30 min.  
+
+**Diffs que rechacé o deshice (/undo) y por qué:** no soluciona los errores la he reiniciado y con el ultimop fallo lo ha solucionado me ha hecho varias preguntas y esta operativo menos transforma-pdf-html.
+Le he vuelto ha explicar lo que debe hacer este comando , en el directorio que se le indique buscar los pdf y convertirlos en html.
+le he dicho que podrian ser varios pdf en la misma ruta y me ha propuesto hacer index.html, style.css , json para poder indexarlos asi poder acceder desde la pagina principal. yo le hedicho ok pero que se debe poder actualizar los ficheros pdf en esa ruta con el comando sin tocar nada mas.
+
+**Funcionaba a la primera:** no al haceer test da error y le paso el texto a la IA y se bloqueado y al dia siguiente ya lo ha solucionado.
+
+**Qué aprendí:** Es muy importante hacer los test completos para detectar fallos. y nuy importante leer y entenderlos antes de pegar en la IA, porque igual puede ser que te ponga que no existe la ruta y te falta una "s" o que te este dando la solucion sin que la IA tenga culpa.
+
+
+### Prompt 2
+**Herramienta:** MiM0-V2.6-F1ash Free OpenCode
+
+**Prompt del plan (agente Build):** 
+
+   enorabuena ya van todos menos este PS C:\manuales> tareas ejecutar transformar-pdf-html C:\Users\juant\Downloads\DAM --simular
+SIMULACIÓN: generaría «DATOS.html» para «DATOS.pdf»
+SIMULACIÓN: generaría «Documento sin título (1).html» para «Documento sin título.pdf»
+PS C:\manuales> tareas ejecutar transformar-pdf-html C:\Users\juant\Downloads\DAM
+¿Ejecutar «transformar-pdf-html» (transformar)? [y/N]: y
+Transformado: «DATOS.pdf» → «DATOS.html»
+Transformado: «Documento sin título.pdf» → «Documento sin título (1).html»
+PS C:\manuales>  qu es el de transformar-pdf-html igual esta mal expresado lo que queria era Convertir del pdf a html (crear una carpeta con el nombre del Pdf , crear un ibdex.html, crear un css ( que podria ser generico si hay muchos pdf en la misma carpeta y script para crear interactividad. lo normal es que sean manuales de impresoras. y queria hacer una base de datos con estos ficheros .                         
+La ia pregunta y se opta por hacer el script y CSS generico , un index.html de pagina principal y luego los demas con paginas creadas con  pymupdf asi saca los datos del fichero como imagen y se lo incrusta el texto. Asi si funciona con word podrias crear un pdf y de ese un html. 
+
+**Qué corregí del plan:** El plan es sacar la informacion y pegarla . le he dicho que se debe poder actualizar los ficheros en el caso que se descargue algun pdf mas con un comando como --upgrade. 
+
+**Diffs que rechacé o deshice (/undo) y por qué:** Me pregunta tres preguntas y optamos por usar  pymupdf para crear los html 
+
+**Funcionaba a la primera:** 
+
+**Qué aprendí:** Es muy importante hacer los test completos para detectar fallos. y nuy importante leer y entenderlos antes de pegar en la IA, porque igual puede ser que te ponga que no existe la ruta y te falta una "s" o que te este dando la solucion sin que la IA tenga culpa.
+
 

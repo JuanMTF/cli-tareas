@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -120,16 +122,153 @@ def test_acciones_nombre_parecido_lo_sugiere() -> None:
     assert "¿Quisiste decir" in _texto(resultado)
 
 
-def test_ejecutar_tipo_no_implementado_da_1() -> None:
-    resultado = runner.invoke(app, ["ejecutar", "ordenar-descargas"])
-    assert resultado.exit_code == 1
-    assert "no está implementado" in _texto(resultado)
+def test_ejecutar_mover_simulado_no_toca_nada(tmp_path: Path) -> None:
+    """La acción mover ya está implementada: en simulación no toca nada."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    (origen / "doc.pdf").write_text("x", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "ordenar-descargas", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "SIMULACIÓN" in texto
+    assert "doc.pdf" in texto
+    # el fichero sigue donde estaba
+    assert (origen / "doc.pdf").exists()
 
 
-def test_ejecutar_comprimir_todavia_no_implementado_da_1() -> None:
-    resultado = runner.invoke(app, ["ejecutar", "comprimir-antiguos"])
+def test_ejecutar_comprimir_simulado_no_toca_nada(tmp_path: Path) -> None:
+    """La acción comprimir ya está implementada: en simulación no toca nada."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    # el filtro pide más de 400 días: lo envejecemos a propósito
+    antiguo = time.time() - 500 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "SIMULACIÓN" in texto
+    assert not list(tmp_path.rglob("*.zip"))  # no se creó ningún zip
+
+
+def test_ejecutar_comprimir_antiguedad_selecciona_segun_opcion(tmp_path: Path) -> None:
+    """--antiguedad/-an <N> manda sobre el «mas_antiguo_que_dias» del fichero."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    # El fichero tiene 20 días: con --antiguedad 10 sí es "más antiguo"; con 30 no.
+    antiguo = time.time() - 20 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+
+    # «-an 10»: 20 días > 10, así que sí se comprime.
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "comprimir-antiguos",
+            "--simular",
+            "-an",
+            "10",
+            "--carpeta",
+            str(origen),
+        ],
+    )
+    assert resultado.exit_code == 0
+    assert "1 fichero(s)" in _texto(resultado)
+
+    # «--antiguedad 30»: 20 días < 30, así que no se comprime.
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "comprimir-antiguos",
+            "--simular",
+            "--antiguedad",
+            "30",
+            "--carpeta",
+            str(origen),
+        ],
+    )
+    assert resultado.exit_code == 0
+    assert "No hay ficheros que cumplan el filtro" in _texto(resultado)
+
+    # Sin la opción se usa el valor del fichero (400 días): tampoco se comprime.
+    resultado = runner.invoke(
+        app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    assert "No hay ficheros que cumplan el filtro" in _texto(resultado)
+
+
+def test_ejecutar_copiar_antiguos_simulado_no_toca_nada(tmp_path: Path) -> None:
+    """El tipo «copiar» se ejecuta vía subclase del registro: en simulación no toca nada."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    antiguo = time.time() - 500 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "copiar-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "SIMULACIÓN" in texto
+    assert "viejo.pdf" in texto
+
+
+def test_ejecutar_acepta_carpeta_en_posicion_2(tmp_path: Path) -> None:
+    """Si la acción no abre URLs, la posición 2 se toma como carpeta de origen."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    (origen / "doc.pdf").write_text("x", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "ordenar-descargas", str(origen), "--simular"]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "SIMULACIÓN" in texto
+    assert "doc.pdf" in texto
+    assert (origen / "doc.pdf").exists()
+
+
+def test_ejecutar_url_a_accion_que_no_abre_urls_da_1(tmp_path: Path) -> None:
+    """Una URL en una acción de ficheros avisa en vez de ignorarse."""
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "ordenar-descargas", "https://ejemplo.com/", "--simular"],
+    )
     assert resultado.exit_code == 1
-    assert "no está implementado" in _texto(resultado)
+    texto = _texto(resultado)
+    assert "no abre URLs" in texto
+    assert "--carpeta" in texto
+
+
+def test_ejecutar_carpeta_en_posicion_2_y_como_opcion_da_1(tmp_path: Path) -> None:
+    """La carpeta solo puede indicarse una vez."""
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "ordenar-descargas",
+            str(tmp_path),
+            "--carpeta",
+            str(tmp_path),
+            "--simular",
+        ],
+    )
+    assert resultado.exit_code == 1
+    assert "una sola vez" in _texto(resultado)
 
 
 def test_ejecutar_simular_no_abre_nada(monkeypatch) -> None:
@@ -185,7 +324,15 @@ def test_ejecutar_real_con_e_abre_edge_con_las_urls_del_fichero(monkeypatch) -> 
         vistos.append(url)
         return True
 
+    registros: list[tuple[str, object]] = []
+
+    def _falso_register(
+        nombre: str, klass: object, instance: object = None, **_: object
+    ) -> None:
+        registros.append((nombre, instance))
+
     monkeypatch.setattr(mod_acciones.webbrowser, "open", _falso_abrir)
+    monkeypatch.setattr(mod_acciones.webbrowser, "register", _falso_register)
     monkeypatch.setattr(
         "tareas.cli.buscar_navegador", lambda clave: Path("C:/fake/msedge.exe")
     )
@@ -194,6 +341,10 @@ def test_ejecutar_real_con_e_abre_edge_con_las_urls_del_fichero(monkeypatch) -> 
     assert resultado.exit_code == 0
 
     assert vistos == _urls_abrir_nav()
+    # El navegador que se registra es el pedido («edge» para -e): no el por defecto.
+    assert len(registros) == 1
+    assert registros[0][0] == "edge"
+    assert getattr(registros[0][1], "name", None) == str(Path("C:/fake/msedge.exe"))
 
 
 def test_ejecutar_real_con_url_abre_solo_esa_url(monkeypatch) -> None:
@@ -205,7 +356,15 @@ def test_ejecutar_real_con_url_abre_solo_esa_url(monkeypatch) -> None:
         vistos.append(url)
         return True
 
+    registros: list[tuple[str, object]] = []
+
+    def _falso_register(
+        nombre: str, klass: object, instance: object = None, **_: object
+    ) -> None:
+        registros.append((nombre, instance))
+
     monkeypatch.setattr(mod_acciones.webbrowser, "open", _falso_abrir)
+    monkeypatch.setattr(mod_acciones.webbrowser, "register", _falso_register)
     monkeypatch.setattr(
         "tareas.cli.buscar_navegador", lambda clave: Path("C:/fake/firefox.exe")
     )
@@ -216,11 +375,30 @@ def test_ejecutar_real_con_url_abre_solo_esa_url(monkeypatch) -> None:
     assert resultado.exit_code == 0
 
     assert vistos == ["https://epson.com"]
+    # El navegador que se registra es el pedido («firefox» para -f): no el por defecto.
+    assert len(registros) == 1
+    assert registros[0][0] == "firefox"
+    assert getattr(registros[0][1], "name", None) == str(Path("C:/fake/firefox.exe"))
 
 
 def test_ejecutar_real_cancelado_por_el_usuario_da_1() -> None:
     resultado = runner.invoke(app, ["ejecutar", "abrir-nav"], input="n\n")
     assert resultado.exit_code == 1
+
+
+def test_ejecutar_con_si_no_pregunta_y_ejecuta(monkeypatch) -> None:
+    """--si salta la confirmación: no hace falta responder a la pregunta."""
+    capturado: dict[str, list[str]] = {}
+
+    def _falso_abrir(urls: list[str]) -> None:
+        capturado["urls"] = urls
+
+    monkeypatch.setattr("tareas.cli.abrir_por_defecto", _falso_abrir)
+
+    # sin input: si preguntara, abortaría con código 1
+    resultado = runner.invoke(app, ["ejecutar", "abrir-nav", "--si"])
+    assert resultado.exit_code == 0
+    assert capturado["urls"] == _urls_abrir_nav()
 
 
 def test_ejecutar_dos_navegadores_da_1() -> None:
@@ -240,3 +418,336 @@ def test_ejecutar_navegador_no_instalado_da_1(monkeypatch) -> None:
     resultado = runner.invoke(app, ["ejecutar", "abrir-nav", "-e"], input="y\n")
     assert resultado.exit_code == 1
     assert "No se encontró Microsoft Edge" in _texto(resultado)
+
+
+# --- retoques: carpetas, --destino y solo PDF ------------------------------
+
+
+def test_ejecutar_comprimir_incluye_carpetas_viejas(tmp_path: Path) -> None:
+    """comprimir (y copiar) también elige carpetas antiguas, no solo ficheros."""
+    origen = tmp_path / "origen"
+    (origen / "carpeta-vieja").mkdir(parents=True)
+    (origen / "carpeta-vieja" / "nino.txt").write_text("hola", encoding="utf-8")
+    antiguo = time.time() - 500 * 86400
+    os.utime(origen / "carpeta-vieja", (antiguo, antiguo))
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "carpeta-vieja" in texto
+    assert not list(tmp_path.rglob("*.zip"))
+
+
+def test_ejecutar_copiar_incluye_carpetas_viejas(tmp_path: Path) -> None:
+    """La acción copiar también acepta carpetas como origen."""
+    origen = tmp_path / "origen"
+    (origen / "carpeta-vieja").mkdir(parents=True)
+    antiguo = time.time() - 500 * 86400
+    os.utime(origen / "carpeta-vieja", (antiguo, antiguo))
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "copiar-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    assert "carpeta-vieja" in _texto(resultado)
+
+
+def test_ejecutar_mover_no_elige_carpetas(tmp_path: Path) -> None:
+    """Mover sigue siendo solo de ficheros: no arrastra carpetas del origen."""
+    origen = tmp_path / "origen"
+    (origen / "carpeta-vieja").mkdir(parents=True)
+    antiguo = time.time() - 500 * 86400
+    os.utime(origen / "carpeta-vieja", (antiguo, antiguo))
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "ordenar-descargas", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    assert "carpeta-vieja" not in _texto(resultado)
+
+
+def test_ejecutar_comprimir_destino_de_la_opcion(tmp_path: Path) -> None:
+    """--destino/-d sobreescribe el «destino» del fichero de acciones."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    antiguo = time.time() - 500 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+    salida = tmp_path / "mi-salida"
+
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "comprimir-antiguos",
+            "--simular",
+            "--carpeta",
+            str(origen),
+            "--destino",
+            str(salida),
+        ],
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert str(salida) in texto
+    # sin la opción manda la del fichero de acciones (~/Documentos/PDF)
+    resultado = runner.invoke(
+        app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert str(salida) not in _texto(resultado)
+
+
+def test_ejecutar_copiar_destino_de_la_opcion_copia_de_verdad(tmp_path: Path) -> None:
+    """Con --destino la copia real acaba en la carpeta indicada."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    antiguo = time.time() - 500 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+    salida = tmp_path / "mi-salida"
+
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "copiar-antiguos",
+            "--si",
+            "--carpeta",
+            str(origen),
+            "--destino",
+            str(salida),
+        ],
+    )
+    assert resultado.exit_code == 0
+    assert (salida / "viejo.pdf").exists()
+    assert viejo.exists()  # el original se queda
+
+
+def test_ejecutar_comprimir_destino_abreviado_d(tmp_path: Path) -> None:
+    """La opción también se puede escribir abreviada: -d."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    viejo = origen / "viejo.pdf"
+    viejo.write_text("x", encoding="utf-8")
+    antiguo = time.time() - 500 * 86400
+    os.utime(viejo, (antiguo, antiguo))
+    salida = tmp_path / "otra-salida"
+
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "comprimir-antiguos", "--simular", "-c", str(origen), "-d", str(salida)],
+    )
+    assert resultado.exit_code == 0
+    assert str(salida) in _texto(resultado)
+
+
+def test_transformar_pdf_html_solo_elige_pdf(tmp_path: Path) -> None:
+    """La acción transformar-pdf-html ignora los .docx y el resto de ficheros."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    (origen / "apuntes.pdf").write_text("x", encoding="utf-8")
+    (origen / "contrato.docx").write_text("x", encoding="utf-8")
+    (origen / "instalador.exe").write_text("x", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "transformar-pdf-html", "--simular", "--carpeta", str(origen)],
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "apuntes/index.html" in texto
+    assert "contrato" not in texto
+    assert "instalador" not in texto
+
+
+# --- retoques: solo fecha, nombre del .zip y nada de sobrescribir ----------
+
+
+def _viejo(ruta: Path, dias: int = 500) -> Path:
+    """Crea el fichero si hacía falta y le pone la antigüedad indicada."""
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    if not ruta.exists():
+        ruta.write_text("x", encoding="utf-8")
+    antiguo = time.time() - dias * 86400
+    os.utime(ruta, (antiguo, antiguo))
+    return ruta
+
+
+def test_comprimir_no_filtra_por_tipo_de_fichero(tmp_path: Path) -> None:
+    """comprimir-antiguos solo filtra por fecha: coge .txt, .exe, lo que sea."""
+    origen = tmp_path / "mi-carpeta"
+    origen.mkdir()
+    for nombre in ("notas.txt", "instalador.exe", "foto.jpg"):
+        (origen / nombre).write_text("x", encoding="utf-8")
+        _viejo(origen / nombre)
+    (origen / "nuevo.pdf").write_text("x", encoding="utf-8")  # hoy: no entra
+
+    resultado = runner.invoke(
+        app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "notas.txt" in texto
+    assert "instalador.exe" in texto
+    assert "foto.jpg" in texto
+    assert "nuevo.pdf" not in texto
+
+
+def test_comprimir_el_zip_se_llama_como_la_carpeta(tmp_path: Path) -> None:
+    """Sin opción de nombre, el .zip se llama como la carpeta de origen."""
+    origen = tmp_path / "descargas-viejas"
+    origen.mkdir()
+    _viejo(origen / "a.txt")
+    destino = tmp_path / "salida"
+
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "comprimir-antiguos",
+            "--si",
+            "--carpeta",
+            str(origen),
+            "--destino",
+            str(destino),
+        ],
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    assert (destino / "descargas-viejas.zip").exists()
+    # Antes se llamaba como la acción: eso ya no pasa.
+    assert not (destino / "comprimir-antiguos.zip").exists()
+
+
+def test_comprimir_opcion_nombre_para_el_zip(tmp_path: Path) -> None:
+    """--nombre/-N cambia el nombre del .zip."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    _viejo(origen / "a.txt")
+    destino = tmp_path / "salida"
+
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "comprimir-antiguos",
+            "--si",
+            "-c",
+            str(origen),
+            "-d",
+            str(destino),
+            "-N",
+            "respaldo-enero",
+        ],
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    assert (destino / "respaldo-enero.zip").exists()
+
+
+def test_comprimir_no_sobreescribe_renombra_el_zip(tmp_path: Path) -> None:
+    """Si el .zip ya existe se renombra con « (1)»: nunca se pisa."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    _viejo(origen / "a.txt")
+    destino = tmp_path / "salida"
+    destino.mkdir()
+    (destino / "origen.zip").write_text("ZIP VIEJO", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "comprimir-antiguos", "--si", "-c", str(origen), "-d", str(destino)],
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "origen (1).zip" in texto
+    assert "ya existía: renombrado" in texto
+    assert (destino / "origen.zip").read_text(encoding="utf-8") == "ZIP VIEJO"
+
+
+def test_copiar_no_sobreescribe_renombra(tmp_path: Path) -> None:
+    """Si en el destino ya hay algo con ese nombre, se renombra y no se pisa."""
+    origen = tmp_path / "origen"
+    (origen / "Ajustes").mkdir(parents=True)
+    (origen / "Ajustes" / "nuevo.txt").write_text("NUEVO", encoding="utf-8")
+    _viejo(origen / "Ajustes")
+    destino = tmp_path / "destino"
+    (destino / "Ajustes").mkdir(parents=True)
+    (destino / "Ajustes" / "vacio.txt").write_text("NO BORRAR", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "copiar-antiguos", "--si", "-c", str(origen), "-d", str(destino)],
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "Ajustes (1)" in texto
+    assert "ya existía: renombrado" in texto
+    # Lo que ya estaba sigue intacto y lo nuevo está al lado.
+    assert (destino / "Ajustes" / "vacio.txt").read_text(encoding="utf-8") == "NO BORRAR"
+    assert (destino / "Ajustes (1)" / "nuevo.txt").read_text(encoding="utf-8") == "NUEVO"
+
+
+def test_n_es_abreviatura_de_antiguedad(tmp_path: Path) -> None:
+    """-n N hace lo mismo que -an N y --antiguedad N."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    _viejo(origen / "veinte-dias.pdf", dias=20)
+
+    for opcion in ("-n", "-an", "--antiguedad"):
+        resultado = runner.invoke(
+            app,
+            ["ejecutar", "comprimir-antiguos", "--simular", opcion, "10", "-c", str(origen)],
+        )
+        assert resultado.exit_code == 0, _texto(resultado)
+        assert "veinte-dias.pdf" in _texto(resultado), opcion
+
+    # Con 30 días no entra (20 < 30).
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "comprimir-antiguos", "--simular", "-n", "30", "-c", str(origen)],
+    )
+    assert resultado.exit_code == 0
+    assert "veinte-dias.pdf" not in _texto(resultado)
+
+
+def test_nombre_en_una_accion_que_no_comprime_da_1(tmp_path: Path) -> None:
+    """--nombre solo tiene sentido en comprimir: en el resto avisa y sale con 1."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    (origen / "a.txt").write_text("x", encoding="utf-8")
+
+    resultado = runner.invoke(
+        app,
+        [
+            "ejecutar",
+            "copiar-antiguos",
+            "--simular",
+            "-c",
+            str(origen),
+            "--destino",
+            str(tmp_path / "salida"),
+            "--nombre",
+            "cualquiera",
+        ],
+    )
+    assert resultado.exit_code == 1
+    assert "solo sirve para acciones de tipo «comprimir»" in _texto(resultado)
+
+
+def test_mensaje_vacio_explica_el_filtro(tmp_path: Path) -> None:
+    """Si no hay nada que elegir, dice por qué (qué filtro se aplicó)."""
+    origen = tmp_path / "origen"
+    origen.mkdir()
+    (origen / "reciente.pdf").write_text("x", encoding="utf-8")  # hoy
+
+    resultado = runner.invoke(
+        app,
+        ["ejecutar", "comprimir-antiguos", "--simular", "-n", "30", "-c", str(origen)],
+    )
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "No hay ficheros que cumplan el filtro" in texto
+    assert "más antiguos que 30 días" in texto

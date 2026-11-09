@@ -59,11 +59,15 @@ class Motor:
         abrir: Callable[[list[str]], None] | None = None,
         antiguedad: int | None = None,
         destino: Path | None = None,
+        nombre_zip: str | None = None,
     ) -> list[Resultado]:
         """Ejecuta una acción y devuelve la lista de resultados.
 
         Para el tipo «abrir» abre las URLs (o describe la simulación); para el
         resto selecciona ficheros en la carpeta y los mueve/borra/etc.
+
+        ``nombre_zip`` (opción --nombre) solo lo usa el tipo «comprimir»: se deja
+        en la configuración de la acción durante esta ejecución.
         """
         accion = self.acciones.get(nombre)
         if accion is None:
@@ -74,6 +78,15 @@ class Motor:
             raise TareasError(f"No existe la acción: {nombre}.{detalle}")
 
         tipo = accion.config.get("tipo")
+
+        if nombre_zip:
+            if tipo != "comprimir":
+                raise TareasError(
+                    "La opción --nombre solo sirve para acciones de tipo «comprimir»."
+                )
+            # Se copia la configuración (no se pisa la original) y solo para
+            # esta ejecución: Comprimir lee «nombre_zip» de ahí.
+            accion.config = {**accion.config, "nombre_zip": nombre_zip}
 
         if tipo == "abrir":
             urls_efectivas = list(urls) if urls else list(accion.config.get("urls") or [])
@@ -106,6 +119,10 @@ class Motor:
         if antiguedad is not None:
             # La opción de la CLI manda sobre el valor del fichero («mas_antiguo_que_dias»).
             filtro["mas_antiguo_que_dias"] = antiguedad
+        # Se deja en la configuración el filtro realmente usado, para que los
+        # mensajes («no hay ficheros que cumplan el filtro...») expliquen el
+        # criterio que mandó, y no el que pone el JSON.
+        accion.config = {**accion.config, "filtro": filtro}
         ficheros = self.seleccionar(
             carpeta_ejecucion,
             filtro,

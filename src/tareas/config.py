@@ -181,9 +181,14 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
             raise AccionNoValida(
                 accion, "filtro.extensiones", "debe ser una lista."
             )
-        if not ("extensiones" in filtro or "patron" in filtro):
+        # El filtro tiene que servir para algo: al menos un criterio reconocido.
+        # (Se puede filtrar solo por antigüedad, sin «extensiones» ni «patron».)
+        if not any(clave in filtro for clave in FILTRO_CONOCIDO):
             raise AccionNoValida(
-                accion, "filtro", "necesita «extensiones» o «patron»."
+                accion,
+                "filtro",
+                "necesita al menos uno de: «extensiones», «patron», "
+                "«mas_antiguo_que_dias» o «mayor_que_mb».",
             )
         if tipo == "borrar" and "patron" not in filtro:
             raise AccionNoValida(
