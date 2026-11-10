@@ -15,6 +15,7 @@ from tareas import traduccion
 traduccion.instalar()
 
 import typer
+from click.shell_completion import CompletionItem
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
@@ -32,7 +33,7 @@ from tareas.acciones import (
     cargar_acciones,
     validar_acciones,
 )
-from tareas.errores import TareasError
+from tareas.errores import ConfigError, TareasError
 from tareas.motor import Motor
 
 consola = Console()
@@ -238,11 +239,20 @@ def validar(
 
     try:
         acciones = config.cargar(ruta)
-        nombres_vistos: set[str] = set()
-        for indice, accion in enumerate(acciones, start=1):
-            config.validar(accion, indice, nombres_vistos)
     except TareasError as exc:
         _error_validacion(str(exc), exc.codigo_salida)
+
+    # Acumula TODOS los errores y avisos de una sola pasada.
+    errores, avisos = validar_acciones(acciones)
+
+    for aviso in avisos:
+        consola.print(f"[yellow]Aviso:[/yellow] {escape(aviso)}")
+
+    if errores:
+        consola_err.print(f"[red]Se encontraron {len(errores)} errores:[/red]")
+        for error in errores:
+            consola_err.print(f"[red]- {escape(error)}[/red]")
+        raise typer.Exit(code=ConfigError.codigo_salida)
 
     consola.print(f"[green]✔ {len(acciones)} acciones válidas[/green]")
 
@@ -306,11 +316,35 @@ def indexar(
         typer.echo(mensaje)
 
 
+class NombresAccion:
+    """Autocompletado de nombres de acción leyendo acciones.json.
+
+    Con esto, `cliwork ejecutar <TAB>` propone las acciones del fichero
+    (ordenar-descargas, abrir-nav...) evitando errores de tecleo. Si el
+    JSON no se puede leer, devuelve la lista vacía y ya validará bien.
+    """
+
+    def shell_complete(self, ctx: Any, incomplete: str) -> list[Any]:
+        try:
+            lista = config.cargar(config.RUTA_ACCIONES)
+        except TareasError:
+            return []
+        return [
+            CompletionItem(str(accion["nombre"]))
+            for accion in lista
+            if isinstance(accion.get("nombre"), str)
+            and accion["nombre"].startswith(incomplete)
+        ]
+
+
 @app.command()
 def ejecutar(
     nombre: Annotated[
         str,
-        typer.Argument(help="Nombre de la acción a ejecutar (ej.: abrir-nav)."),
+        typer.Argument(
+            help="Nombre de la acción a ejecutar (ej.: abrir-nav).",
+            autocompletion=NombresAccion,
+        ),
     ],
     entrada: Annotated[
         str | None,

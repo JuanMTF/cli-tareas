@@ -353,5 +353,23 @@ La ia pregunta y se opta por hacer el script y CSS generico , un index.html de p
 **Funcionaba a la primera:** 
 
 **Qué aprendí:** Es muy importante hacer los test completos para detectar fallos. y nuy importante leer y entenderlos antes de pegar en la IA, porque igual puede ser que te ponga que no existe la ruta y te falta una "s" o que te este dando la solucion sin que la IA tenga culpa.
+## 10-11-2026 Cambio de nombre de cli Ahora es cliWork
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):** 
+Le pido que cambie el nombre y me realize un script para lanzar las pruebas del comandos asi no tengo que teclear solo ejecuto el script . Esta guardado en .Pruebas/ejecutar.bat. lo ha ha hecho rapido.
+   
+         
+
+**Qué corregí del plan:** Le dige que me diera una idea para el nombre y le sugeri varios y no me dio mas , pero cliwork me gusta .
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+Hoy ha funcionado bien ha la primera y no tenidop falos el test a la primera.ç
+
+**Funcionaba a la primera:** 
+ha funcionado a la primera una tarea relativamnet sencilla en 20 min lo ha realizado el scrip y cambio de nombre .
+
+**Qué aprendí:** he actualizado Open code y esta ia funciona muy bien . cuando das tareas sencillas funciona. mejor.
 
 

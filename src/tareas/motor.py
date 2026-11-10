@@ -15,12 +15,13 @@ from tareas.errores import TareasError
 class Motor:
     """Ejecuta las acciones del fichero: las busca, selecciona y ejecuta."""
 
-    # Acciones que archivan (comprimir, copiar): admite «carpetas» como origen,
-    # no solo ficheros sueltos. Mover/borrar/renombrar se aplican a ficheros.
-    TIPOS_CON_CARPETAS = ("comprimir", "copiar")
-
     def __init__(self, acciones: list[dict[str, Any]]) -> None:
         self.acciones = {a["nombre"]: Accion.desde_config(a) for a in acciones}
+
+    @property
+    def destructivas(self) -> set[str]:
+        """Nombres de las acciones que borran (la CLI las confirma siempre)."""
+        return {nombre for nombre, accion in self.acciones.items() if accion.destructiva}
 
     @staticmethod
     def seleccionar(
@@ -100,7 +101,7 @@ class Motor:
                 )
                 if ruta_navegador:
                     mensaje += f" Ejecutable: {ruta_navegador}"
-                return [Resultado(True, mensaje)]
+                return [Resultado(None, None, "simulado", mensaje)]
 
             if navegador and ruta_navegador is None:
                 raise TareasError(f"No se encontró {NAVEGADORES[navegador]} en este equipo.")
@@ -126,6 +127,6 @@ class Motor:
         ficheros = self.seleccionar(
             carpeta_ejecucion,
             filtro,
-            incluye_carpetas=tipo in self.TIPOS_CON_CARPETAS,
+            incluye_carpetas=accion.elige_carpetas,
         )
         return accion.ejecutar(ficheros, simular, urls, abrir, destino)

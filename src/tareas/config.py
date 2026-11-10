@@ -43,9 +43,12 @@ _NOMBRE_KEBAB = re.compile(r"^[a-z0-9áéíóúüñ]+(?:[ -áéíóúüñ][a-z0-
 def cargar(ruta: Path) -> list[dict[str, Any]]:
     """Lee el JSON y devuelve la lista de acciones.
 
-    Lanza ConfigError si el fichero no se puede leer, si el JSON no es
+    Lanza ConfigError si la ruta no es un fichero legible, si el JSON no es
     válido (con línea y columna) o si no tiene la estructura esperada.
     """
+    if ruta.exists() and not ruta.is_file():
+        raise ConfigError(f"{ruta}: no es un fichero, parece una carpeta.")
+
     try:
         texto = ruta.read_text(encoding="utf-8")
     except OSError as exc:
@@ -177,10 +180,18 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
         filtro = accion["filtro"]
         if not isinstance(filtro, dict):
             raise AccionNoValida(accion, "filtro", "debe ser un objeto JSON.")
-        if "extensiones" in filtro and not isinstance(filtro["extensiones"], list):
-            raise AccionNoValida(
-                accion, "filtro.extensiones", "debe ser una lista."
-            )
+        if "extensiones" in filtro:
+            if not isinstance(filtro["extensiones"], list):
+                raise AccionNoValida(
+                    accion, "filtro.extensiones", "debe ser una lista."
+                )
+            for ext in filtro["extensiones"]:
+                if not isinstance(ext, str) or not ext.startswith("."):
+                    raise AccionNoValida(
+                        accion,
+                        "filtro.extensiones",
+                        f"cada extensión debe empezar por «.» (encontrado: {ext!r}).",
+                    )
         # El filtro tiene que servir para algo: al menos un criterio reconocido.
         # (Se puede filtrar solo por antigüedad, sin «extensiones» ni «patron».)
         if not any(clave in filtro for clave in FILTRO_CONOCIDO):
