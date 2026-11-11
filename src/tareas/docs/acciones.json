@@ -78,6 +78,14 @@
       "confirmar": true,
       "puertos_conservar": ["USB001", "USB002"],
       "copia_seguridad": "~/pruebas-tareas/usb-backup.reg"
+    },
+    {
+      "nombre": "renombrar-capturas",
+      "descripcion": "Renombra capturas de pantalla a NOMBRE_numero_fecha_hora: el nombre generico lo pasas con -n (ej.: -n Capturas) y la carpeta con -r o -c; sin opciones usa la carpeta de capturas del JSON. Solo .png/.jpg y nunca sobrescribe.",
+      "tipo": "renombrar",
+      "origen": "C:/Users/juant/OneDrive/Imágenes/Screenshots",
+      "filtro": { "extensiones": [".png", ".jpg", ".jpeg"] },
+      "plantilla": "{base}_{n}_{fecha:%Y-%m-%d_%H-%M}{ext}"
     }
   ]
 }

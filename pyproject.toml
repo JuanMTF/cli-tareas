@@ -14,8 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tareas = "tareas.cli:app" # nombre antiguo, se mantiene por compatibilidad
-cliwork = "tareas.cli:app" # nombre corto: cliwork ejecutar abrir-nav
+cliWork = "tareas.cli:app" # nombre del programa: cliWork ejecutar abrir-nav
 
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14.0"]

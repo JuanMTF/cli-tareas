@@ -6,7 +6,7 @@ Repo pequeño, un solo paquete. Esto es lo que no se deduce solo de leer los nom
 # tareas · CLI de tareas con ficheros (proyecto de 1º DAM)
 ## Stack y órdenes
 - Python 3.12 + Typer + Rich, gestionado con uv (src layout, paquete src/tareas).
-- Ejecutar: `uv run tareas --help` · Validar config: `uv run tareas validar` · Pruebas (semana 4): `uv run pytest`.
+- Ejecutar: `uv run cliWork --help` · Validar config: `uv run cliWork validar` · Pruebas (semana 4): `uv run pytest`.
 ## Normas
 - Mensajes y comentarios en español; código claro antes que listo.
 - pathlib siempre, encoding="utf-8", nada de os.system ni shell=True: tiene que funcionar en Linux, Windows y macOS.
@@ -18,8 +18,8 @@ Repo pequeño, un solo paquete. Esto es lo que no se deduce solo de leer los nom
 
 - Instalar/sincronizar deps: `uv sync` (crea/actualiza `.venv`; no hay `requirements.txt`)
 - Añadir dependencia: `uv add <pkg>` (edita `pyproject.toml` + `uv.lock`; no editar a mano)
-- Ejecutar la CLI: `uv run tareas --help`
-- Ejecutar un comando concreto: `uv run tareas validar <fichero>` (eso es lo que permite `opencode.json`)
+- Ejecutar la CLI: `uv run cliWork --help`
+- Ejecutar un comando concreto: `uv run cliWork validar <fichero>` (eso es lo que permite `opencode.json`)
 - Tests: `uv run pytest` — **pytest NO está instalado**: falta `uv add --dev pytest` y aún no existe `tests/`
 
 No hay lint, formatter, typecheck ni CI configurados. No inventes órdenes de verificación:

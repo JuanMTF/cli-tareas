@@ -146,10 +146,14 @@ def en_modo_completado() -> bool:
 
     Typer guarda el «instrucción» de completion en variables de entorno con
     nombre distinto según el shell; todas empiezan por «_TYPER_COMPLETE» o son
-    la de prog propio («_TAREAS_COMPLETE» para «tareas»).
+    la de prog propio («_CLIWORK_COMPLETE» para «cliWork»; se acepta también
+    la antigua «_TAREAS_COMPLETE» por si queda en algún perfil de shell).
     """
     for nombre, valor in os.environ.items():
-        if valor and (nombre.startswith("_TYPER_COMPLETE") or nombre == "_TAREAS_COMPLETE"):
+        if valor and (
+            nombre.startswith("_TYPER_COMPLETE")
+            or nombre in ("_CLIWORK_COMPLETE", "_TAREAS_COMPLETE")
+        ):
             return True
     return False
 
@@ -298,7 +302,7 @@ def instalar() -> None:
         escribía una línea vacía con «_click.echo(… comp.complete())». En
         PowerShell esa línea vacía provoca que el scriptblock del autocompletado
         falle antes de borrar las variables de completion: quedan puestas y los
-        siguientes «tareas» se ejecutaban como si fueran peticiones de
+        siguientes «cliWork» se ejecutaban como si fueran peticiones de
         autocompletado (por eso "no respondían"). Aquí no se escribe nada.
         """
         if isinstance(message, str) and message == "" and en_modo_completado():

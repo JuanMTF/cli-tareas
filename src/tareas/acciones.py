@@ -61,13 +61,18 @@ def destino_libre(destino: Path) -> Path:
 _HUECO = re.compile(r"\{([^{}]+)\}")
 
 
-def aplicar_plantilla(plantilla: str, fichero: Path, n: int, fecha: datetime) -> str:
-    """Rellena los huecos de una plantilla: {fecha:...}, {n:03}, {ext}, {nombre}."""
+def aplicar_plantilla(
+    plantilla: str, fichero: Path, n: int, fecha: datetime, base: str = "Captura"
+) -> str:
+    """Rellena los huecos de una plantilla: {fecha:...}, {n:03}, {n}, {ext}, {nombre}, {base}."""
 
     def _sustituir(match: re.Match[str]) -> str:
         hueco = match.group(1)
         if hueco.startswith("fecha:"):
             return fecha.strftime(hueco[len("fecha:") :])
+        if hueco == "n":
+            # Número de orden sin ceros: 1, 2, 3...
+            return str(n)
         if hueco.startswith("n:"):
             ancho = hueco[len("n:") :]
             return f"{n:0{int(ancho)}d}" if ancho.isdigit() else str(n)
@@ -75,6 +80,9 @@ def aplicar_plantilla(plantilla: str, fichero: Path, n: int, fecha: datetime) ->
             return fichero.suffix
         if hueco == "nombre":
             return fichero.stem
+        if hueco == "base":
+            # Nombre genérico que pasa la CLI con --nombre (ej.: -n Capturas).
+            return base
         return match.group(0)
 
     return _HUECO.sub(_sustituir, plantilla)
@@ -407,9 +415,12 @@ class Renombrar(Accion):
     ) -> Resultado:
         """Renombra un elemento en su misma carpeta según la plantilla."""
         plantilla = self.config.get("plantilla", "{nombre}{ext}")
+        # {base} es el nombre genérico: llega con --nombre (motor lo inyecta
+        # como «nombre_generico»); si no se pidió, se usa «Captura».
+        base = str(self.config.get("nombre_generico") or "Captura")
         # stat() es solo lectura: vale incluso en simulación.
         fecha = datetime.fromtimestamp(fichero.stat().st_mtime)
-        nuevo_nombre = aplicar_plantilla(plantilla, fichero, n, fecha)
+        nuevo_nombre = aplicar_plantilla(plantilla, fichero, n, fecha, base)
         if nuevo_nombre == fichero.name:
             # Ya cumple la plantilla: tocarlo solo crearía « (1)» sin sentido.
             return Resultado(
@@ -600,7 +611,7 @@ class Comprimir(Accion):
         # El .zip se llama como la carpeta origen; si se pidió --nombre, manda ese
         # (el motor lo deja en «nombre_zip» de la configuración solo para ejecutar).
         nombre = str(self.config.get("nombre_zip") or fichero.parent.name).strip()
-        nombre = nombre or str(self.config.get("nombre") or "tareas")
+        nombre = nombre or str(self.config.get("nombre") or "cliWork")
         libre = destino_libre(destino_final / f"{nombre}.zip")
         nota = " (ya existía: renombrado)" if libre.name != f"{nombre}.zip" else ""
         if simular:

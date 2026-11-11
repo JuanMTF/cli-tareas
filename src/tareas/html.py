@@ -10,7 +10,7 @@ Qué se genera dentro de la carpeta de destino:
 - ``<destino>/manuales.json``: la «base de datos» con los metadatos de cada PDF.
 - ``<destino>/index.html``: la galería que lista todos los manuales.
 
-La orden ``tareas indexar`` reutiliza estas mismas funciones: revisa la carpeta,
+La orden ``cliWork indexar`` reutiliza estas mismas funciones: revisa la carpeta,
 convierte solo los PDF que falten y actualiza el JSON sin tocar lo ya hecho.
 """
 
@@ -305,7 +305,7 @@ def _pymupdf():
     except ImportError as exc:  # pragma: no cover - dependencia faltante
         raise TareasError(
             "Falta la dependencia «pymupdf» para convertir PDF. "
-            "Instálala con «uv add pymupdf». Si además usas «tareas» instalado con "
+            "Instálala con «uv add pymupdf». Si además usas «cliWork» instalado con "
             "«uv tool install», repite «uv tool install --editable .» para que la "
             "herramienta también la tenga."
         ) from exc

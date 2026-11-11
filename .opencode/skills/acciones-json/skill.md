@@ -1,6 +1,6 @@
 ---
 name: acciones-json
-description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, filtros, plantillas y validación). Úsala siempre que crees o cambies acciones o el código que las lee (config.py, acciones.py, motor.py).
+description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, filtros, plantillas y validación). Úsala siempre que crees o cambies acciones o el código que las lee (config.py, acciones.py, motor.py).
 ---
 # Esquema de acciones.json
 - Raíz: {"version": 1, "acciones": [...]}. Cada acción: nombre (único, minúsculas-con-guiones), descripcion, tipo.
@@ -8,7 +8,9 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
   - `abrir` → requiere `urls` (lista de http:// o https://). Abre pestañas en el navegador.
   - `mover` → requiere `origen`, `filtro` y `destino`. Mueve sin sobrescribir.
   - `copiar` → requiere `origen`, `filtro` y `destino`. Copia sin borrar el original.
-  - `renombrar` → requiere `filtro` y `plantilla`. Renombra en su misma carpeta.
+  - `renombrar` → requiere `filtro` y `plantilla`. Renombra en su misma carpeta. Admite
+    opcionalmente `origen` (carpeta por defecto cuando la CLI no pasa `-r`/`-c`; está en
+    `CAMPOS_OPCIONALES_POR_TIPO` para que `validar` no avise de que «le sobra»).
   - `borrar` → requiere `filtro` y `confirmar`. Borra; **siempre pide confirmación salvo `--si`**.
   - `transformar` → requiere `origen`, `filtro` y `destino`. Convierte **cada PDF** en una
     carpeta `<destino>/<nombre>/index.html` con `pagina-NN.png` + capa de texto (PyMuPDF),
@@ -33,15 +35,17 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
   - Un campo de filtro que no se reconozca es **aviso**, no error.
   - Si no se elige nada, el mensaje dice el filtro que se aplicó
     («No hay ficheros que cumplan el filtro (más antiguos que 400 días).»).
-- plantilla: huecos {fecha:%Y-%m-%d}, {n:03}, {ext}, {nombre}.
+- plantilla: huecos {fecha:%Y-%m-%d}, {n}, {n:03}, {ext}, {nombre}, {base}.
   - `{fecha:...}` usa la fecha de modificación del fichero y admite cualquier formato de strftime.
-  - `{n:03}` es el número de orden con ceros a la izquierda.
+  - `{n}` es el número de orden sin ceros (1, 2, 3...); `{n:03}` lo pone con ceros (001).
+  - `{base}` es el nombre genérico que pasa la CLI con `--nombre`/`-N`; sin ella cae a «Captura».
+    El motor lo inyecta como `nombre_generico` en la configuración (ver motor.py).
 
 ## Órdenes relacionadas
-- `tareas validar [FICHERO]` → comprueba el JSON; errores con código de salida 3.
-- `tareas acciones [NOMBRE]` → lista todas o muestra el detalle de una.
-- `tareas ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA] [--destino RUTA] [--antiguedad N] [--nombre TEXTO]` → ejecuta.
-  - Opción global `--config RUTA` (en el callback, va después de `tareas`): fichero JSON de
+- `cliWork validar [FICHERO]` → comprueba el JSON; errores con código de salida 3.
+- `cliWork acciones [NOMBRE]` → lista todas o muestra el detalle de una.
+- `cliWork ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA] [--destino RUTA] [--antiguedad N] [--nombre TEXTO]` → ejecuta.
+  - Opción global `--config RUTA` (en el callback, va después de `cliWork`): fichero JSON de
     acciones; por defecto, el empaquetado `src/tareas/docs/acciones.json`.
   - La posición 2: si el tipo es `abrir`, es la URL (tiene que empezar por http/https); para el
     resto de tipos es la carpeta de origen. Indicarla en los dos sitios a la vez es error.
@@ -49,14 +53,17 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
     transformar): solo cambia dónde se escribe, **nunca pisa lo que ya hay** (destino_libre).
   - `--antiguedad`/`-an N`/`-n N` tiene prioridad sobre `filtro.mas_antiguo_que_dias` del JSON
     (por defecto el del fichero). Sirve para comprimir y copiar.
-  - `--nombre`/`-N TEXTO` nombra el `.zip` de `comprimir`; en cualquier otro tipo es error (código 1).
+  - `--nombre`/`-N TEXTO`: en `comprimir` nombra el `.zip`; en `renombrar` es el nombre
+    genérico para el hueco `{base}` (por defecto, «Captura»). En cualquier otro tipo es error (código 1).
+  - `--carpeta`/`-c`/`-r RUTA` tiene prioridad sobre el `origen` del JSON (para los tipos
+    que tienen carpeta: mover, copiar, comprimir, transformar, renombrar...).
   - `comprimir` y `copiar` también eligen **carpetas** (los filtros de extensión/patrón solo aplican a ficheros).
   - `comprimir` y `copiar` **nunca sobrescriben**: si ya hay algo con ese nombre, renombran con
     ` (1)` y lo dicen en el mensaje (`(ya existía: renombrado)`).
   - `--simular` no toca nada y **no pregunta**.
   - `--si` salta la confirmación (imprescindible para borrar sin interacción).
   - La ruta puede ser relativa, absoluta o `~`; se expande con `expanduser` (igual en Windows y Linux).
-- `tareas indexar CARPETA [--destino RUTA] [--simular]` → revisa una carpeta de PDF.
+- `cliWork indexar CARPETA [--destino RUTA] [--simular]` → revisa una carpeta de PDF.
   - Convierte **solo los PDF que falten**; lo ya convertido no se toca.
   - Actualiza `manuales.json` y regenera el `index.html` de la galería.
   - Por defecto guarda en el `destino` de la acción `transformar` del JSON.

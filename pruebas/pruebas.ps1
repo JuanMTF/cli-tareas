@@ -1,4 +1,4 @@
-# pruebas.ps1 - bateria de pruebas de la CLI tareas (proyecto DAM)
+# pruebas.ps1 - bateria de pruebas de la CLI cliWork (proyecto DAM)
 #
 # Que hace:
 #   1. Ejecuta pytest (tests unitarios).
@@ -42,13 +42,13 @@ function Paso {
 }
 
 function Tareas {
-    # Ejecuta "uv run tareas ..." y devuelve salida + codigo de salida.
+    # Ejecuta "uv run cliWork ..." y devuelve salida + codigo de salida.
     param([string[]]$Argumentos)
-    $salida = & uv run tareas @Argumentos 2>&1
+    $salida = & uv run cliWork @Argumentos 2>&1
     [PSCustomObject]@{ Texto = ($salida -join "`n"); Codigo = $LASTEXITCODE }
 }
 
-Write-Host "=== Bateria de pruebas de tareas ===" -ForegroundColor Cyan
+Write-Host "=== Bateria de pruebas de cliWork ===" -ForegroundColor Cyan
 Write-Host ("Modo: {0}" -f ($(if ($SoloSimular) { "solo simulacion" } else { "simulacion + acciones reales (solo en el sandbox)" })))
 Write-Host ""
 
@@ -179,7 +179,7 @@ if ($SoloSimular) {
     Set-Content -Path $tmp -Value "tmp" -Encoding UTF8
     (Get-Item $tmp).LastWriteTime = (Get-Date).AddDays(-60)
 
-    $del1 = "n" | & uv run tareas ejecutar limpiar-temporales $origen 2>&1
+    $del1 = "n" | & uv run cliWork ejecutar limpiar-temporales $origen 2>&1
     $del1texto = ($del1 -join "`n")
     $Preserva = Test-Path $tmp
     # Al contestar 'n', click cancela con "Cancelado." y codigo 1: eso es

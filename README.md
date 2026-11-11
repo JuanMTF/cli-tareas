@@ -1,4 +1,4 @@
-# tareas
+# cliWork
 
 Mi herramienta de línea de órdenes para automatizar tareas repetitivas con ficheros.
 
@@ -6,9 +6,9 @@ Mi herramienta de línea de órdenes para automatizar tareas repetitivas con fic
 
 1. **Problema:** cada semana pierdo tiempo en Descargar el Firmware y manuales de varios equipos,  (ej.: ordenar Descargas a mano).
 2. **Para quién:** para mí y para la oficina.
-3. **Cómo se usa:** `tareas ORDEN [CARPETA] [opciones]` desde cualquier terminal.
-4. **Órdenes de la semana 1:** `tareas --help`, `tareas version`, `tareas listar [CARPETA]`.
-5. **Órdenes previstas:** `tareas acciones`, `tareas validar`, `tareas ejecutar NOMBRE --simular`.
+3. **Cómo se usa:** `cliWork ORDEN [CARPETA] [opciones]` desde cualquier terminal.
+4. **Órdenes de la semana 1:** `cliWork --help`, `cliWork version`, `cliWork listar [CARPETA]`.
+5. **Órdenes previstas:** `cliWork acciones`, `cliWork validar`, `cliWork ejecutar NOMBRE --simular`.
 6. **Mis 3 acciones (borrador):** descargar , Cambiar nombre, ordenar .
 7. **Nunca hará:** borrar sin preguntar ni tocar ficheros fuera de la carpeta que le indique.
 8. **Plataformas:** Linux primero; también Windows y macOS.
@@ -19,13 +19,13 @@ Mi herramienta de línea de órdenes para automatizar tareas repetitivas con fic
 
 | Orden | Qué hace |
 |-------|----------|
-| `tareas --help` | Ayuda general. |
-| `tareas version` | Muestra la versión (`tareas 0.1.0`). |
-| `tareas listar [CARPETA]` | Tabla con el contenido de una carpeta (por defecto, la actual). |
-| `tareas acciones [NOMBRE]` | Lista las acciones o muestra el detalle de una. |
-| `tareas validar [FICHERO]` | Comprueba el JSON de acciones. Sale con código 3 si algo falla. |
-| `tareas indexar CARPETA` | Revisa una carpeta de PDF: convierte los que falten y actualiza `manuales.json` sin tocar lo ya hecho. |
-| `tareas ejecutar NOMBRE [CARPETA\|URL]` | Ejecuta una acción. La posición 2 es URL si el tipo es `abrir`; si no, la carpeta. |
+| `cliWork --help` | Ayuda general. |
+| `cliWork version` | Muestra la versión (`cliWork 0.1.0`). |
+| `cliWork listar [CARPETA]` | Tabla con el contenido de una carpeta (por defecto, la actual). |
+| `cliWork acciones [NOMBRE]` | Lista las acciones o muestra el detalle de una. |
+| `cliWork validar [FICHERO]` | Comprueba el JSON de acciones. Sale con código 3 si algo falla. |
+| `cliWork indexar CARPETA` | Revisa una carpeta de PDF: convierte los que falten y actualiza `manuales.json` sin tocar lo ya hecho. |
+| `cliWork ejecutar NOMBRE [CARPETA\|URL]` | Ejecuta una acción. La posición 2 es URL si el tipo es `abrir`; si no, la carpeta. |
 
 ### Opciones de `indexar`
 
@@ -34,27 +34,27 @@ Mi herramienta de línea de órdenes para automatizar tareas repetitivas con fic
 - `--simular` — solo muestra qué haría: **no convierte ni escribe nada**.
 
 ```bash
-tareas indexar C:\Users\yo\Downloads\DAM --simular   # primero mira qué haría
-tareas indexar C:\Users\yo\Downloads\DAM              # convierte los nuevos y actualiza el JSON
+cliWork indexar C:\Users\yo\Downloads\DAM --simular   # primero mira qué haría
+cliWork indexar C:\Users\yo\Downloads\DAM              # convierte los nuevos y actualiza el JSON
 ```
 
 ### Opciones de `ejecutar`
 
-- `--config RUTA` (global: va después de `tareas` y antes de la orden) — fichero JSON de acciones. Por defecto, el empaquetado `src/tareas/docs/acciones.json`.
+- `--config RUTA` (global: va después de `cliWork` y antes de la orden) — fichero JSON de acciones. Por defecto, el empaquetado `src/tareas/docs/acciones.json`.
 - `--simular` — solo muestra qué haría: **no pregunta, no toca nada**.
 - `--si` — salta la confirmación. Imprescindible para borrar sin interacción.
-- `--carpeta RUTA` / `-c RUTA` — carpeta de origen; tiene prioridad sobre la del fichero. Admite `~`, `/` y `\`.
+- `--carpeta RUTA` / `-c RUTA` / `-r RUTA` — carpeta de origen; tiene prioridad sobre la del fichero. Admite `~`, `/` y `\`.
 - `--destino RUTA` / `-d RUTA` — carpeta de destino; tiene prioridad sobre la del fichero de acciones. Admite `~`, `/` y `\`. Sirve para `comprimir`, `copiar`, `mover` y `transformar`.
 - `--antiguedad <N>` / `-an <N>` / `-n <N>` — solo lo más viejo que N días (por defecto, el del fichero: 400 días). Sirve para `comprimir` y `copiar`.
-- `--nombre TEXTO` / `-N TEXTO` — nombre del `.zip` que hace `comprimir`. Por defecto, **el de la carpeta origen** (`~/Descargas` → `Descargas.zip`).
+- `--nombre TEXTO` / `-N TEXTO` — en `comprimir`, el nombre del `.zip` (por defecto, **el de la carpeta origen**: `~/Descargas` → `Descargas.zip`); en `renombrar`, el nombre genérico del hueco `{base}` (por defecto, `Captura`). Con `-n` (minúscula) no vale: es la antigüedad en días.
 - **Posición 2** (la que va justo después del nombre): si la acción es de tipo `abrir`, es la URL a abrir; para el resto de tipos es la carpeta de origen (lo mismo que `--carpeta`, pero no se pueden indicar las dos veces).
 - `--google` / `-g`, `--firefox` / `-f`, `--edge` / `-e` — navegador (solo tipo `abrir`).
 
 ```bash
-uv run tareas ejecutar ordenar-descargas ~/pruebas-tareas --simular   # carpeta en posición 2
-uv run tareas ejecutar abrir-nav https://github.com --simular         # URL en posición 2
-uv run tareas ejecutar comprimir-antiguos -n 10 --simular             # lo de más de 10 días
-uv run tareas ejecutar comprimir-antiguos -n 30 --nombre respaldo     # .zip llamado respaldo.zip
+uv run cliWork ejecutar ordenar-descargas ~/pruebas-tareas --simular   # carpeta en posición 2
+uv run cliWork ejecutar abrir-nav https://github.com --simular         # URL en posición 2
+uv run cliWork ejecutar comprimir-antiguos -n 10 --simular             # lo de más de 10 días
+uv run cliWork ejecutar comprimir-antiguos -n 30 --nombre respaldo     # .zip llamado respaldo.zip
 ```
 
 **`comprimir` y `copiar` nunca sobrescriben:** si en el destino ya hay algo con ese
@@ -70,7 +70,7 @@ Definidas en `src/tareas/docs/acciones.json`; el esquema completo está en la sk
 |------|-------------------|----------|
 | `abrir` | `urls` | Abre las URLs en el navegador. |
 | `mover` | `origen`, `filtro`, `destino` | Mueve ficheros al destino. |
-| `renombrar` | `filtro`, `plantilla` | Renombra con plantillas `{fecha:%Y-%m-%d}_{n:03}{ext}`. |
+| `renombrar` | `filtro`, `plantilla` | Renombra en su misma carpeta con la plantilla. Acepta además `origen` (carpeta por defecto si la CLI no pasa `-r`). |
 | `borrar` | `filtro`, `confirmar` | Borra ficheros. Siempre pregunta salvo `--simular` o `--si`. |
 | `transformar` | `origen`, `filtro`, `destino` | Convierte cada PDF en una carpeta con su HTML (ver «Manuales PDF → HTML»). |
 | `comprimir` | `origen`, `filtro`, `destino` | Crea un `.zip` con los ficheros y carpetas elegidos; el nombre es el de la carpeta origen (o el de `--nombre`). |
@@ -83,17 +83,19 @@ Definidas en `src/tareas/docs/acciones.json`; el esquema completo está en la sk
 
 **Filtro:** `extensiones` (lista), `patron` (regex), `mas_antiguo_que_dias`, `mayor_que_mb`. Basta con **uno** de los cuatro: por ejemplo, `{"mas_antiguo_que_dias": 400}` solo pide antigüedad y coge **cualquier** tipo de fichero. Si no sale nada, el mensaje dice el filtro que se aplicó.
 
+**Huecos de la plantilla de `renombrar`:** `{fecha:FORMATO}` (fecha de modificación del fichero, cualquier strftime), `{n}` (número de orden: 1, 2, 3...), `{n:03}` (con ceros: 001), `{ext}` (extensión con punto), `{nombre}` (nombre original sin extensión) y `{base}` (el nombre genérico que pasa la CLI con `-N`/`--nombre`; sin ella, `Captura`).
+
 Ejemplo mínimo:
 
 ```bash
-uv run tareas validar
-uv run tareas ejecutar ordenar-descargas ~/pruebas-tareas --simular  # primero mira qué haría
-uv run tareas ejecutar ordenar-descargas ~/pruebas-tareas --si       # luego, sin preguntar
+uv run cliWork validar
+uv run cliWork ejecutar ordenar-descargas ~/pruebas-tareas --simular  # primero mira qué haría
+uv run cliWork ejecutar ordenar-descargas ~/pruebas-tareas --si       # luego, sin preguntar
 ```
 
 ## Manuales PDF → HTML
 
-`transformar-pdf-html` y `tareas indexar` comparten el módulo `src/tareas/html.py`.
+`transformar-pdf-html` y `cliWork indexar` comparten el módulo `src/tareas/html.py`.
 Convierten **solo PDF** (PyMuPDF) y dejan esto en el destino:
 
 ```
@@ -118,10 +120,10 @@ HTMLtransformados/
 - **Nunca sobrescribe lo ya convertido:** si la carpeta del PDF ya tiene su
   `index.html`, se salta.
 
-### `tareas indexar` (mantener el índice al día)
+### `cliWork indexar` (mantener el índice al día)
 
 ```bash
-tareas indexar C:\Users\yo\Downloads\DAM
+cliWork indexar C:\Users\yo\Downloads\DAM
 ```
 
 Revisa la carpeta y hace **solo** esto:
@@ -135,7 +137,7 @@ Si borras `manuales.json`, lo vuelve a montar con lo que ya está convertido.
 
 ## Acciones definidas
 
-Fichero: `src/tareas/docs/acciones.json` (9 acciones válidas).
+Fichero: `src/tareas/docs/acciones.json` (10 acciones válidas).
 
 | Acción | Tipo | Qué hace |
 |--------|------|----------|
@@ -146,6 +148,7 @@ Fichero: `src/tareas/docs/acciones.json` (9 acciones válidas).
 | `limpiar-temporales` | borrar | Borra los `.tmp` con más de 30 días. |
 | `ordenar-descargas` | mover | Mueve los PDF y documentos de Descargas a Documentos/PDF. |
 | `renombrar-fotos` | renombrar | Renombra fotos con su fecha. |
+| `renombrar-capturas` | renombrar | Renombra capturas de pantalla a `NOMBRE_n_fecha_hora` (carpeta con `-r`, nombre con `-N`). |
 | `transformar-pdf-html` | transformar | Convierte cada PDF en una carpeta con su HTML, páginas en imagen y texto buscable. |
 | `usb-del` | limpiar-usb | Limpia del registro las huellas de USB e impresoras (solo Windows, como administrador). |
 
@@ -168,13 +171,32 @@ elevar, error claro con código 1). Qué hace, en orden:
    reescribir las claves**.
 
 ```bash
-uv run tareas ejecutar usb-del --simular    # lista qué tocaría, sin tocar nada
-uv run tareas ejecutar usb-del              # pide confirmación y pregunta el reinicio
+uv run cliWork ejecutar usb-del --simular    # lista qué tocaría, sin tocar nada
+uv run cliWork ejecutar usb-del              # pide confirmación y pregunta el reinicio
 ```
 
 Las claves de `SYSTEM\Enum` pertenecen a SYSTEM: si alguna se resiste, la
 acción lo reporta como «saltado» y no aborta; la copia `.reg` permite volver
 atrás desde regedit (a ser necesario con psexec -s).
+
+### `renombrar-capturas` (capturas de pantalla con fecha)
+
+Renombra las capturas de tu app de capturas a `NOMBRE_n_fecha_hora`
+(ej.: `Captura_2_2026-11-11_09-45.png`). La fecha/hora sale de la
+modificación del fichero (cuando la app la escribió), y `{n}` corrige
+las que caen el mismo minuto. **Nunca sobrescribe** y **se salta** las
+que ya cumplen la plantilla, así que se puede relanzar cada semana y
+solo toca las capturas nuevas.
+
+- Carpeta: con `-r RUTA` (o `-c`); sin ella usa la del JSON
+  (`C:/Users/juant/OneDrive/Imágenes/Screenshots`).
+- Nombre genérico: con `-N TEXTO` (ej.: `-N Capturas`); sin ella, `Captura`.
+
+```bash
+uv run cliWork ejecutar renombrar-capturas --simular                     # la carpeta del JSON
+uv run cliWork ejecutar renombrar-capturas -r ~/pruebas-tareas --simular # otra carpeta
+uv run cliWork ejecutar renombrar-capturas -N Capturas                   # real, con confirmación
+```
 
 ## Seguridad
 
@@ -183,14 +205,16 @@ atrás desde regedit (a ser necesario con psexec -s).
 ## Desarrollo
 
 - Instalar/sincronizar dependencias: `uv sync`.
-- Ejecutar: `uv run tareas --help`.
-- Validar config: `uv run tareas validar`.
+- Ejecutar: `uv run cliWork --help`.
+- Validar config: `uv run cliWork validar`.
 - Tests: `uv run pytest`.
 
 ### Instalado en el PATH (`uv tool`)
 
-`tareas` está instalado con `uv tool install --editable .`, y eso crea **un entorno
-propio** (`%APPDATA%\u\uv\tools\tareas`), distinto del `.venv` del proyecto.
+`cliWork` está instalado con `uv tool install --editable .`, y eso crea **un entorno
+propio** (`%APPDATA%\u\uv\tools\tareas`), distinto del `.venv` del proyecto. La
+carpeta sigue llamándose `tareas` porque es el **nombre del paquete** interno, no
+el de la orden.
 
 **Consecuencia:** si añades una dependencia (`uv add pymupdf`), solo entra en el
 entorno del proyecto. Para que la herramienta instalada también la tenga, repite:

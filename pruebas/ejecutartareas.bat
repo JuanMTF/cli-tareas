@@ -1,5 +1,5 @@
 @echo off
-rem Ejecuta la bateria de pruebas de la CLI tareas (doble clic y listo).
+rem Ejecuta la bateria de pruebas de la CLI cliWork (doble clic y listo).
 rem Vive en la carpeta pruebas\: sube a la raiz del proyecto para que
 rem "uv run" encuentre el pyproject.toml.
 rem Todo queda en ~/pruebas-tareas; con "solo-simular" no toca el disco.

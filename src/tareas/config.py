@@ -39,6 +39,12 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
 # Campos que se reconocen dentro de 'filtro'.
 FILTRO_CONOCIDO = ("extensiones", "patron", "mas_antiguo_que_dias", "mayor_que_mb")
 
+# Campos opcionales que el motor SÍ usa en cada tipo (no deben avisar como «de más»).
+# Ej.: en «renombrar», «origen» es la carpeta por defecto cuando la CLI no pasa ninguna.
+CAMPOS_OPCIONALES_POR_TIPO: dict[str, tuple[str, ...]] = {
+    "renombrar": ("origen",),
+}
+
 # nombre en kebab-case: minúsculas, números, guiones, tildes y espacios. Ej.: abrir-nav
 _NOMBRE_KEBAB = re.compile(r"^[a-z0-9áéíóúüñ]+(?:[ -áéíóúüñ][a-z0-9áéíóúüñ]+)*$")
 
@@ -261,7 +267,12 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
             )
 
     # campos que no le tocan a este tipo -> aviso, no error
-    de_mas = sorted(set(accion) - set(CAMPOS_COMUNES) - set(CAMPOS_POR_TIPO[tipo]))
+    de_mas = sorted(
+        set(accion)
+        - set(CAMPOS_COMUNES)
+        - set(CAMPOS_POR_TIPO[tipo])
+        - set(CAMPOS_OPCIONALES_POR_TIPO.get(tipo, ()))
+    )
     if de_mas:
         avisos.append(
             f"{etiqueta}: campos que no le tocan a «{tipo}»: {', '.join(de_mas)}."

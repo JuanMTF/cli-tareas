@@ -68,7 +68,7 @@ def principal(
         ),
     ] = config.RUTA_ACCIONES,
 ) -> None:
-    """Opciones globales de la CLI (se ponen justo después de «tareas»)."""
+    """Opciones globales de la CLI (se ponen justo después de «cliWork»)."""
     ctx.obj = {"ruta_config": config_ruta.expanduser()}
 
 
@@ -122,8 +122,8 @@ def _mensaje_no_existe(nombre: str, lista: list[dict[str, Any]]) -> str:
 
 @app.command()
 def version() -> None:
-    """Muestra la versión de tareas."""
-    typer.echo(f"tareas {tareas.__version__}")
+    """Muestra la versión de cliWork."""
+    typer.echo(f"cliWork {tareas.__version__}")
 
 
 @app.command()
@@ -293,7 +293,7 @@ def _reiniciar_equipo() -> None:
     try:
         subprocess.run(
             ["shutdown", "/r", "/t", "10", "/c",
-             "tareas: reinicio obligatorio tras limpiar el registro de USB"],
+             "cliWork: reinicio obligatorio tras limpiar el registro de USB"],
             check=False,
         )
     except OSError as exc:
@@ -506,6 +506,7 @@ def ejecutar(
         typer.Option(
             "--carpeta",
             "-c",
+            "-r",
             help="Carpeta de origen; tiene prioridad sobre la del fichero de acciones. Admite ~.",
         ),
     ] = None,
@@ -541,7 +542,10 @@ def ejecutar(
         typer.Option(
             "--nombre",
             "-N",
-            help="Nombre del .zip que crea «comprimir» (por defecto, el de la carpeta origen).",
+            help=(
+                "«comprimir»: nombre del .zip (por defecto, el de la carpeta origen). "
+                "«renombrar»: nombre genérico para el hueco {base} (por defecto, Captura)."
+            ),
         ),
     ] = None,
 ) -> None:
@@ -570,7 +574,7 @@ def ejecutar(
     if errores:
         _error(
             f"El fichero de acciones tiene {len(errores)} error(es). "
-            f"Ejecuta «tareas validar» para verlos.",
+            f"Ejecuta «cliWork validar» para verlos.",
             codigo=3,
         )
 

@@ -67,8 +67,8 @@ class Motor:
         Para el tipo «abrir» abre las URLs (o describe la simulación); para el
         resto selecciona ficheros en la carpeta y los mueve/borra/etc.
 
-        ``nombre_zip`` (opción --nombre) solo lo usa el tipo «comprimir»: se deja
-        en la configuración de la acción durante esta ejecución.
+        ``nombre_zip`` (opción --nombre) lo usa el tipo «comprimir» para el
+        .zip y el tipo «renombrar» como nombre genérico ({base} de la plantilla).
         """
         accion = self.acciones.get(nombre)
         if accion is None:
@@ -81,13 +81,18 @@ class Motor:
         tipo = accion.config.get("tipo")
 
         if nombre_zip:
-            if tipo != "comprimir":
+            if tipo not in ("comprimir", "renombrar"):
                 raise TareasError(
-                    "La opción --nombre solo sirve para acciones de tipo «comprimir»."
+                    "La opción --nombre solo sirve para acciones de tipo "
+                    "«comprimir» (el .zip) o «renombrar» (el nombre genérico)."
                 )
             # Se copia la configuración (no se pisa la original) y solo para
-            # esta ejecución: Comprimir lee «nombre_zip» de ahí.
-            accion.config = {**accion.config, "nombre_zip": nombre_zip}
+            # esta ejecución: Comprimir lee «nombre_zip» y Renombrar usa
+            # «nombre_generico» para el hueco {base} de su plantilla.
+            if tipo == "comprimir":
+                accion.config = {**accion.config, "nombre_zip": nombre_zip}
+            else:
+                accion.config = {**accion.config, "nombre_generico": nombre_zip}
 
         if tipo == "abrir":
             urls_efectivas = list(urls) if urls else list(accion.config.get("urls") or [])
