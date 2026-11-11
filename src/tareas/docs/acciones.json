@@ -70,6 +70,14 @@
       "origen": "~/Descargas",
       "filtro": { "mas_antiguo_que_dias": 400 },
       "destino": "~/Documentos/PDFcopias"
+    },
+    {
+      "nombre": "usb-del",
+      "descripcion": "Limpia huellas de USB: desinstala las impresoras, borra sus claves de conexion y los puertos USB00x sobrantes del registro (conserva USB001 y USB002) y avisa de que hay que reiniciar.",
+      "tipo": "limpiar-usb",
+      "confirmar": true,
+      "puertos_conservar": ["USB001", "USB002"],
+      "copia_seguridad": "~/pruebas-tareas/usb-backup.reg"
     }
   ]
 }

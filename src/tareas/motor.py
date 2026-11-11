@@ -108,6 +108,10 @@ class Motor:
 
             return accion.ejecutar([], False, urls_efectivas, abrir=abrir)
 
+        if tipo == "limpiar-usb":
+            # Trabaja con el registro de Windows: sin carpeta ni ficheros.
+            return accion.ejecutar([], simular, urls, abrir, destino)
+
         # Acciones sobre ficheros: mover, renombrar, borrar, transformar, comprimir.
         carpeta_ejecucion = (carpeta or Path(accion.config.get("origen") or ".")).expanduser()
         if not carpeta_ejecucion.is_dir():

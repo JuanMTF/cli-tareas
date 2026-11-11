@@ -6,7 +6,8 @@
 #   3. Crea un sandbox en ~/pruebas-tareas/bateria con ficheros de ejemplo
 #      (uno con fecha antigua para probar los filtros por dias).
 #   4. Ejecuta acciones sobre el sandbox: mover (simulado y real, dos veces),
-#      copiar, comprimir y borrar.
+#      copiar, comprimir y borrar. usb-del y transformar-pdf-html solo
+#      simulados (no tocan el registro ni convierten nada).
 #   5. Cuenta OK/FALLO y sale con codigo 1 si algo fallo (util para CI).
 #
 # Solo toca ~/pruebas-tareas. Nunca borra nada fuera del sandbox.
@@ -114,6 +115,24 @@ $sim = Tareas @("ejecutar", "ordenar-descargas", $origen, "-d", $destino, "--sim
 $quedan = (Get-ChildItem $origen -File).Count
 Paso "mover --simular anuncia SIMULACION" (($sim.Codigo -eq 0) -and ($sim.Texto -match "SIMULACI.N"))
 Paso "mover --simular NO mueve nada (ni mkdir)" (($quedan -ge 3) -and ((Get-ChildItem $destino -ErrorAction SilentlyContinue).Count -eq 0)) ("quedan {0} ficheros en origen" -f $quedan)
+
+# 4.1bis usb-del --simular: enumera (USBSTOR, impresoras...) pero NO borra
+# nada, NO crea el .reg de copia de seguridad y NO pregunta el reinicio.
+$usb = Tareas @("ejecutar", "usb-del", "--simular")
+$backupUSB = Join-Path $HOME "pruebas-tareas\usb-backup.reg"
+Paso "usb-del --simular termina bien" ($usb.Codigo -eq 0)
+Paso "usb-del --simular enumera USBSTOR e impresoras" (($usb.Texto -match "USBSTOR") -and ($usb.Texto -match "impresora"))
+Paso "usb-del --simular NO crea la copia de seguridad" (-not (Test-Path $backupUSB))
+Paso "usb-del --simular NO reinicia ni lo pregunta" (-not ($usb.Texto -match "reiniciar"))
+
+# 4.1ter transformar-pdf-html --simular: anuncia la conversion con un PDF de
+# prueba con nombre unico y NO crea nada en el destino real.
+$pdfSim = Join-Path $origen "bateria-simular.pdf"
+Set-Content -Path $pdfSim -Value "pdf de prueba de la bateria" -Encoding UTF8
+$tr = Tareas @("ejecutar", "transformar-pdf-html", $origen, "--simular")
+$destinoSim = Join-Path (Join-Path $HOME "Descargas\HTMLtransformados") "bateria-simular"
+Paso "transformar --simular anuncia SIMULACION con su PDF" (($tr.Codigo -eq 0) -and ($tr.Texto -match "SIMULACI.N") -and ($tr.Texto -match "bateria-simular"))
+Paso "transformar --simular NO convierte nada" (-not (Test-Path $destinoSim))
 
 if ($SoloSimular) {
     Write-Host ""

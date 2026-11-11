@@ -492,7 +492,8 @@ def test_ejecutar_comprimir_destino_de_la_opcion(tmp_path: Path) -> None:
     )
     assert resultado.exit_code == 0
     texto = _texto(resultado)
-    assert str(salida) in texto
+    # La ruta completa se pliega en la tabla (ancho 80): comprobamos el nombre.
+    assert salida.name in texto
     # sin la opción manda la del fichero de acciones (~/Documentos/PDF)
     resultado = runner.invoke(
         app, ["ejecutar", "comprimir-antiguos", "--simular", "--carpeta", str(origen)]
@@ -542,7 +543,8 @@ def test_ejecutar_comprimir_destino_abreviado_d(tmp_path: Path) -> None:
         ["ejecutar", "comprimir-antiguos", "--simular", "-c", str(origen), "-d", str(salida)],
     )
     assert resultado.exit_code == 0
-    assert str(salida) in _texto(resultado)
+    # La ruta completa se pliega en la tabla (ancho 80): comprobamos el nombre.
+    assert salida.name in _texto(resultado)
 
 
 def test_transformar_pdf_html_solo_elige_pdf(tmp_path: Path) -> None:

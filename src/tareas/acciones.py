@@ -9,7 +9,9 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import subprocess
 import sys
+import tempfile
 import webbrowser
 import zipfile
 from abc import ABC, abstractmethod
@@ -628,6 +630,368 @@ class Comprimir(Accion):
             "hecho",
             f"Comprimido: {len(self._pendientes)} fichero(s) → «{libre}»{nota}",
         )
+
+
+# Claves del registro que limpia «limpiar-usb» (huellas de USB y de impresoras).
+# Rutas de HKLM/HKCU en formato de reg.exe (sin la montura HKLM\...).
+_CLAVES_HKLM = (
+    r"HKLM\SYSTEM\CurrentControlSet\Enum\USBSTOR",
+    r"HKLM\SYSTEM\CurrentControlSet\Enum\USB",
+    r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Print\Printers",
+    r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Ports",
+)
+_CLAVE_HKCU = (
+    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2"
+)
+_CABECERA_REG = "Windows Registry Editor Version 5.00"
+
+
+@Accion.registrar("limpiar-usb")
+class LimpiarUSB(Accion):
+    """Limpia del registro de Windows las huellas de USB y de impresoras.
+
+    Solo Windows y con permisos de administrador (menos en --simular, que
+    solo enumera). Borra: impresoras (desinstalándolas de verdad y vaciando
+    sus claves), los puertos USB00x que no estén en «puertos_conservar» y el
+    historial (Enum\\USBSTOR, Enum\\USB, MountPoints2). Antes exporta una
+    copia .reg restaurable. El reinicio del equipo lo pide la CLI al terminar.
+    """
+
+    destructiva = True
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        """Una sola pasada: trabaja con el registro, no con ficheros."""
+        if sys.platform != "win32":
+            raise TareasError(
+                "La acción «limpiar-usb» solo funciona en Windows: el registro "
+                "de Windows no existe en este sistema."
+            )
+        if not simular and not self._es_administrador():
+            raise TareasError(
+                "Se necesitan permisos de administrador para limpiar el registro "
+                "de Windows: vuelve a lanzar la CLI desde un terminal de "
+                "administrador."
+            )
+        resultados: list[Resultado] = []
+
+        # Copia de seguridad .reg de TODAS las claves que se van a tocar.
+        copia = Path(str(self.config.get("copia_seguridad"))).expanduser()
+        resultado_copia = self._exportar_copia(copia, simular)
+        if resultado_copia is not None:
+            resultados.append(resultado_copia)
+
+        resultados.extend(self._limpiar_impresoras(simular))
+        resultados.extend(self._limpiar_puertos(simular))
+        resultados.extend(self._limpiar_historial(simular))
+        return resultados
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """No se usa: «limpiar-usb» trabaja con el registro, no por fichero."""
+        raise NotImplementedError("limpiar-usb no trabaja por ficheros.")
+
+    # --- copia de seguridad ---------------------------------------------------
+
+    def _exportar_copia(self, copia: Path, simular: bool) -> Resultado | None:
+        """Exporta con reg.exe todas las claves a UN fichero .reg restaurable."""
+        if simular:
+            return Resultado(
+                None,
+                copia,
+                "simulado",
+                f"SIMULACIÓN: guardaría la copia de seguridad en «{copia}».",
+            )
+        partes: list[str] = [_CABECERA_REG]
+        for clave in (*_CLAVES_HKLM, _CLAVE_HKCU):
+            with tempfile.TemporaryDirectory() as tmp:
+                trozo = Path(tmp) / "trozo.reg"
+                hecho = subprocess.run(
+                    ["reg", "export", clave, str(trozo), "/y"],
+                    capture_output=True,
+                    text=False,
+                    check=False,
+                )
+            if hecho.returncode != 0:
+                # La clave no existe o no se puede leer: se sigue sin ella.
+                continue
+            texto = trozo.read_text(encoding="utf-16")
+            lineas = texto.splitlines()
+            # Se quita la cabecera repetida y las líneas en blanco del principio.
+            cuerpo = [l for l in lineas[1:] if l.strip()]
+            partes.extend(cuerpo)
+        copia.parent.mkdir(parents=True, exist_ok=True)
+        copia.write_text("\r\n".join(partes) + "\r\n", encoding="utf-16")
+        return Resultado(
+            None,
+            copia,
+            "hecho",
+            f"Copia de seguridad guardada en «{copia}» (se puede restaurar con regedit).",
+        )
+
+    # --- impresoras -----------------------------------------------------------
+
+    def _limpiar_impresoras(self, simular: bool) -> list[Resultado]:
+        """Desinstala las impresoras de verdad y vacía su clave de conexiones."""
+        import winreg
+
+        resultados: list[Resultado] = []
+        try:
+            con_clave = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control\Print\Printers",
+            )
+        except FileNotFoundError:
+            return resultados
+        with con_clave:
+            nombres = self._listar_subclaves(con_clave)
+        for nombre in nombres:
+            if simular:
+                resultados.append(
+                    Resultado(
+                        None, None, "simulado",
+                        f"SIMULACIÓN: desinstalaría la impresora «{nombre}».",
+                    )
+                )
+                continue
+            hecho = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-Command",
+                    f"Remove-Printer -Name '{nombre}'",
+                ],
+                capture_output=True, text=True, check=False,
+            )
+            if hecho.returncode == 0:
+                resultados.append(
+                    Resultado(None, None, "hecho", f"Desinstalada la impresora «{nombre}».")
+                )
+            else:
+                resultados.append(
+                    Resultado(
+                        None, None, "saltado",
+                        f"No se pudo desinstalar la impresora «{nombre}»: "
+                        f"{(hecho.stderr or '').strip()}",
+                    )
+                )
+        # La clave de conexiones que se borra a mano (SOFTWARE\...\Print\Printers).
+        resultados.extend(
+            self._borrar_subclaves(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Print\Printers",
+                simular,
+                etiqueta="claves de conexiones de impresora",
+            )
+        )
+        return resultados
+
+    # --- puertos USB ----------------------------------------------------------
+
+    def _limpiar_puertos(self, simular: bool) -> list[Resultado]:
+        """Borra de la clave Ports los puertos USB00x que no se conservan."""
+        import winreg
+
+        conservar = {
+            str(p).upper()
+            for p in (self.config.get("puertos_conservar") or [])
+        }
+        resultados: list[Resultado] = []
+        try:
+            con_clave = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Ports",
+                0,
+                # Con --simular basta leer; para borrar hace falta escribir.
+                winreg.KEY_READ if simular else winreg.KEY_ALL_ACCESS,
+            )
+        except FileNotFoundError:
+            return resultados
+        except PermissionError:
+            if simular:
+                return [
+                    Resultado(
+                        None, None, "saltado",
+                        "Sin permisos para leer la clave «Ports».",
+                    )
+                ]
+            return [
+                Resultado(
+                    None, None, "saltado",
+                    "Sin permisos para tocar la clave «Ports»: ejecuta la CLI "
+                    "como administrador.",
+                )
+            ]
+        with con_clave:
+            puertos = []
+            indice = 0
+            while True:
+                try:
+                    nombre, _, _ = winreg.EnumValue(con_clave, indice)
+                except OSError:
+                    break
+                indice += 1
+                if nombre.upper().startswith("USB") and nombre.upper() not in conservar:
+                    puertos.append(nombre)
+        for puerto in puertos:
+            if simular:
+                resultados.append(
+                    Resultado(
+                        None, None, "simulado",
+                        f"SIMULACIÓN: borraría el puerto «{puerto}» "
+                        f"(se conservan: {', '.join(sorted(conservar))}).",
+                    )
+                )
+                continue
+            try:
+                winreg.DeleteValue(
+                    winreg.OpenKey(
+                        winreg.HKEY_LOCAL_MACHINE,
+                        r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Ports",
+                        0,
+                        winreg.KEY_SET_VALUE,
+                    ),
+                    puerto,
+                )
+                resultados.append(
+                    Resultado(None, None, "hecho", f"Borrado el puerto «{puerto}».")
+                )
+            except OSError as exc:
+                resultados.append(
+                    Resultado(
+                        None, None, "saltado",
+                        f"No se pudo borrar el puerto «{puerto}»: {exc}",
+                    )
+                )
+        if not resultados:
+            resultados.append(
+                Resultado(
+                    None, None, "saltado",
+                    f"No hay puertos USB00x que borrar "
+                    f"(se conservan: {', '.join(sorted(conservar))}).",
+                )
+            )
+        return resultados
+
+    # --- historial de USB -----------------------------------------------------
+
+    def _limpiar_historial(self, simular: bool) -> list[Resultado]:
+        """Vacía Enum\\USBSTOR, Enum\\USB y MountPoints2 (huellas de USB)."""
+        import winreg
+
+        resultados: list[Resultado] = []
+        for hive, clave, etiqueta in (
+            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Enum\USBSTOR",
+             "USBSTOR (memorias conectadas)"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Enum\USB",
+             "Enum\\USB (dispositivos USB)"),
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion"
+             r"\Explorer\MountPoints2",
+             "MountPoints2 (letras de unidad)"),
+        ):
+            resultados.extend(
+                self._borrar_subclaves(hive, clave, simular, etiqueta=etiqueta)
+            )
+        return resultados
+
+    # --- utilidades de registro ------------------------------------------------
+
+    @staticmethod
+    def _es_administrador() -> bool:
+        """True si el proceso va con el token elevado de administrador."""
+        try:
+            import ctypes
+
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except (AttributeError, OSError):
+            return False
+
+    @staticmethod
+    def _listar_subclaves(con_clave: Any) -> list[str]:
+        """Los nombres de las subclaves de una clave abierta."""
+        import winreg
+
+        subclaves = []
+        indice = 0
+        while True:
+            try:
+                subclaves.append(winreg.EnumKey(con_clave, indice))
+            except OSError:
+                break
+            indice += 1
+        return subclaves
+
+    def _borrar_subclaves(
+        self, hive: Any, clave: str, simular: bool, etiqueta: str
+    ) -> list[Resultado]:
+        """Borra (o enumera, con --simular) TODAS las subclaves de una clave."""
+        import winreg
+
+        resultado: list[Resultado] = []
+        try:
+            con_clave = winreg.OpenKey(hive, clave)
+        except FileNotFoundError:
+            return []
+        with con_clave:
+            subclaves = self._listar_subclaves(con_clave)
+        if not subclaves:
+            resultado.append(
+                Resultado(None, None, "saltado", f"«{etiqueta}» ya está vacía.")
+            )
+            return resultado
+        for subclave in subclaves:
+            ruta = f"{clave}\\{subclave}"
+            if simular:
+                resultado.append(
+                    Resultado(
+                        None, None, "simulado",
+                        f"SIMULACIÓN: borraría la clave «{ruta}».",
+                    )
+                )
+                continue
+            if self._borrar_clave_recursivo(hive, ruta):
+                resultado.append(
+                    Resultado(None, None, "hecho", f"Borrada la clave «{ruta}».")
+                )
+            else:
+                resultado.append(
+                    Resultado(
+                        None, None, "saltado",
+                        f"No se pudo borrar «{ruta}»: sin permisos (SYSTEM). "
+                        f"Toma posesión a mano con regedit si hace falta.",
+                    )
+                )
+        return resultado
+
+    @staticmethod
+    def _borrar_clave_recursivo(hive: Any, ruta: str) -> bool:
+        """Borra una clave y todas sus subclaves. True si se borró."""
+        import winreg
+
+        try:
+            con_clave = winreg.OpenKey(hive, ruta, 0, winreg.KEY_ALL_ACCESS)
+        except (FileNotFoundError, PermissionError):
+            return False
+        with con_clave:
+            for subclave in LimpiarUSB._listar_subclaves(con_clave):
+                if not LimpiarUSB._borrar_clave_recursivo(hive, f"{ruta}\\{subclave}"):
+                    return False
+        try:
+            winreg.DeleteKey(hive, ruta)
+        except (FileNotFoundError, PermissionError, OSError):
+            return False
+        return True
 
 
 class ErrorConfiguracion(ConfigError):

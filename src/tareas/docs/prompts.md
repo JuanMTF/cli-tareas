@@ -373,3 +373,34 @@ ha funcionado a la primera una tarea relativamnet sencilla en 20 min lo ha reali
 **Qué aprendí:** he actualizado Open code y esta ia funciona muy bien . cuando das tareas sencillas funciona. mejor.
 
 
+
+## 11-11-2026 Sigo el tutorial de edu:
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+prompt refernci de edu : para crear otra Accion 
+---
+description: Añade una acción nueva a acciones.json y, si hace falta, el código que la soporta
+agent: build
+---
+Quiero añadir la acción: $ARGUMENTS
+1. Carga la skill acciones-json.
+2. Propón primero la entrada JSON y espera mi visto bueno.
+3. Si el tipo ya existe, solo edita acciones.json. Si no, añade la clase en src/tareas/acciones.py siguiendo el patrón de las demás.
+4. Termina ejecutando `uv run tareas validar` y dime qué orden con --simular debo probar yo.
+Estado actual del repo:
+!`git status --short`            
+
+**Qué corregí del plan:** Se corrigue la propuesta de la accion usb-del que hace es borrar el registro de los usb y borrar las impresoras, ( yo cada mes lo tengo que hacer porque el ordenador deja de reconocer las impresoras y asi sera siempre igual y no habra fallos como al hacer a mano,)
+
+**Diffs que rechacé o deshice (/undo) y por qué:** Le pedimos que busque el codigo en internet y lo encuentra y lo adapta la ia a nuestras necesidades , Se revisa que en linux y en Mac estos problemas aunque se registran los usb no es tan comun y es mas complicado el borrado por lo que se opta por no realizar esa parte.
+
+
+**Funcionaba a la primera:** 
+
+
+**Qué aprendí:** 
+
+
+

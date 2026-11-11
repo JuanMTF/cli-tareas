@@ -17,7 +17,7 @@ RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
 TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
-                   "comprimir", "copiar")
+                   "comprimir", "copiar", "limpiar-usb")
 
 # Campos que puede llevar cualquier acción.
 CAMPOS_COMUNES = ("nombre", "descripcion", "tipo", "confirmar")
@@ -31,6 +31,9 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     "transformar": ("origen", "filtro", "destino"),
     "comprimir": ("origen", "filtro", "destino"),
     "copiar": ("origen", "filtro", "destino"),
+    # Limpieza del registro de Windows (huellas de USB): conserva esos puertos
+    # USB00x del JSON y guarda antes una copia .reg en la ruta indicada.
+    "limpiar-usb": ("puertos_conservar", "copia_seguridad"),
 }
 
 # Campos que se reconocen dentro de 'filtro'.
@@ -174,6 +177,25 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
                     "urls",
                     f"la URL {indice_url} no empieza por http:// o https://: {url!r}.",
                 )
+
+    # limpiar-usb: puertos_conservar (lista de nombres) y copia_seguridad (ruta)
+    if tipo == "limpiar-usb":
+        conservar = accion.get("puertos_conservar")
+        if not isinstance(conservar, list) or not conservar or not all(
+            isinstance(p, str) and p.strip() for p in conservar
+        ):
+            raise AccionNoValida(
+                accion,
+                "puertos_conservar",
+                "debe ser una lista de nombres de puerto no vacía (ej.: [\"USB001\", \"USB002\"]).",
+            )
+        copia = accion.get("copia_seguridad")
+        if not isinstance(copia, str) or not copia.strip():
+            raise AccionNoValida(
+                accion,
+                "copia_seguridad",
+                "falta la ruta del .reg de copia de seguridad (texto no vacío).",
+            )
 
     # filtro, si está, tiene forma de comprobar
     if "filtro" in accion:

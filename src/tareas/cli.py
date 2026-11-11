@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,7 @@ from tareas.acciones import (
     ErrorConfiguracion,
     NAVEGADORES,
     RUTA_ACCIONES,
+    Resultado,
     abrir_en_navegador,
     abrir_por_defecto,
     buscar_navegador,
@@ -53,16 +55,42 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def principal(
+    ctx: typer.Context,
+    config_ruta: Annotated[
+        Path,
+        typer.Option(
+            "--config",
+            help="Fichero JSON de acciones. Por defecto, el empaquetado. Admite ~.",
+            show_default=False,
+            metavar="",
+        ),
+    ] = config.RUTA_ACCIONES,
+) -> None:
+    """Opciones globales de la CLI (se ponen justo después de «tareas»)."""
+    ctx.obj = {"ruta_config": config_ruta.expanduser()}
+
+
 def _error(mensaje: str, codigo: int = 1) -> NoReturn:
-    """Escribe un mensaje en stderr y sale con el código indicado (1 por defecto)."""
-    typer.echo(mensaje, err=True)
+    """Error previsto: mensaje en rojo por stderr, sin traceback, y sale con el código."""
+    consola_err.print(f"[red]Error:[/red] {escape(mensaje)}")
     raise typer.Exit(code=codigo)
 
 
 def _error_validacion(mensaje: str, codigo: int = 3) -> NoReturn:
-    """Error de validación: mensaje en rojo por stderr, sin traceback, con el código."""
-    consola_err.print(f"[red]Error:[/red] {escape(mensaje)}")
-    raise typer.Exit(code=codigo)
+    """Error de validación (ConfigError): igual que _error, con código 3 por defecto."""
+    _error(mensaje, codigo)
+
+
+def _ruta_config(ctx: Any) -> Path:
+    """La ruta del fichero de acciones que guardó el callback global en ctx.obj.
+
+    Si no hay ctx (autocompletado fuera de la CLI) o no lleva obj, se usa la
+    empaquetada.
+    """
+    obj = ctx.obj if ctx is not None and isinstance(ctx.obj, dict) else {}
+    return Path(obj.get("ruta_config") or config.RUTA_ACCIONES).expanduser()
 
 
 def tamano_legible(n: int) -> str:
@@ -161,6 +189,7 @@ def listar(
 
 @app.command()
 def acciones(
+    ctx: typer.Context,
     nombre: Annotated[
         str | None,
         typer.Argument(
@@ -169,8 +198,9 @@ def acciones(
     ] = None,
 ) -> None:
     """Muestra las acciones definidas en el fichero de acciones."""
+    ruta_config = _ruta_config(ctx)
     try:
-        lista = cargar_acciones(RUTA_ACCIONES)
+        lista = cargar_acciones(ruta_config)
     except ErrorConfiguracion as exc:
         _error(str(exc), codigo=3)
 
@@ -180,7 +210,7 @@ def acciones(
     if errores:
         for error in errores:
             consola_err.print(f"[red]Error:[/red] {escape(error)}")
-        _error(f"El fichero {RUTA_ACCIONES} tiene {len(errores)} error(es).", codigo=3)
+        _error(f"El fichero {ruta_config} tiene {len(errores)} error(es).", codigo=3)
 
     if not lista:
         typer.echo("Aviso: no hay ninguna acción definida.", err=True)
@@ -196,7 +226,7 @@ def acciones(
         return
 
     filas = sorted(lista, key=lambda accion: str(accion.get("nombre", "")))
-    tabla = Table(title=f"Acciones de {escape(str(RUTA_ACCIONES))}")
+    tabla = Table(title=f"Acciones de {escape(str(ruta_config))}")
     tabla.add_column("Nombre", style="cyan")
     tabla.add_column("Tipo")
     tabla.add_column("Descripción")
@@ -227,15 +257,16 @@ def _mostrar_detalle(accion: dict[str, Any]) -> None:
 
 @app.command()
 def validar(
+    ctx: typer.Context,
     fichero: Annotated[
-        Path,
+        Path | None,
         typer.Argument(
-            help="Fichero JSON a validar. Por defecto, src/tareas/docs/acciones.json."
+            help="Fichero JSON a validar. Por defecto, el que marca la opción global --config."
         ),
-    ] = config.RUTA_ACCIONES,
+    ] = None,
 ) -> None:
     """Comprueba que el fichero de acciones está bien escrito."""
-    ruta = fichero.expanduser()
+    ruta = fichero.expanduser() if fichero is not None else _ruta_config(ctx)
 
     try:
         acciones = config.cargar(ruta)
@@ -255,6 +286,22 @@ def validar(
         raise typer.Exit(code=ConfigError.codigo_salida)
 
     consola.print(f"[green]✔ {len(acciones)} acciones válidas[/green]")
+
+
+def _reiniciar_equipo() -> None:
+    """Programa el reinicio de Windows (aviso de 10 s, se puede cancelar)."""
+    try:
+        subprocess.run(
+            ["shutdown", "/r", "/t", "10", "/c",
+             "tareas: reinicio obligatorio tras limpiar el registro de USB"],
+            check=False,
+        )
+    except OSError as exc:
+        _error(f"No se pudo programar el reinicio: {exc}")
+    consola.print(
+        "[yellow]El equipo se reiniciará en 10 segundos "
+        "(cancela con «shutdown /a» si te ha pillado).[/yellow]"
+    )
 
 
 def _destino_transformar() -> Path | None:
@@ -316,6 +363,85 @@ def indexar(
         typer.echo(mensaje)
 
 
+def _mostrar_simulacion(nombre: str, resultados: list[Resultado]) -> None:
+    """Tabla «fichero → destino» con estado para --simular; no toca nada.
+
+    Los resultados sin rutas (el tipo «abrir» y el aviso de filtro vacío)
+    no van en la tabla: se muestran como texto, como hasta ahora.
+    """
+    tabla = Table(title=f"Simulación de «{escape(nombre)}»: no se toca nada")
+    tabla.add_column("Fichero", style="cyan")
+    tabla.add_column("Destino")
+    tabla.add_column("Estado")
+    tabla.add_column("Detalle")
+    filas: list[tuple[str, str, str, str]] = []
+    for resultado in resultados:
+        if resultado.origen is None and resultado.destino is None:
+            # El aviso de «no hay ficheros que cumplan el filtro» lo muestra
+            # el resumen; aquí solo salen los demás mensajes sin ficheros.
+            if "No hay ficheros que cumplan el filtro" not in resultado.mensaje:
+                typer.echo(resultado.mensaje)
+            continue
+        filas.append(
+            (
+                resultado.origen.name if resultado.origen else "—",
+                resultado.destino.name if resultado.destino else "—",
+                f"[yellow]{escape(resultado.estado)}[/yellow]",
+                escape(resultado.mensaje),
+            )
+        )
+    if filas:
+        for fichero, destino_celda, estado_celda, detalle_celda in filas:
+            tabla.add_row(escape(fichero), escape(destino_celda), estado_celda, detalle_celda)
+        # Si todas las filas van a la misma carpeta, se indica una sola vez.
+        destinos_padre = {
+            resultado.destino.parent
+            for resultado in resultados
+            if resultado.destino is not None
+        }
+        if len(destinos_padre) == 1:
+            carpeta = destinos_padre.pop()
+            tabla.caption = f"Todo dentro de: {escape(str(carpeta))}"
+        consola.print(tabla)
+
+
+def _mostrar_resumen(resultados: list[Resultado]) -> None:
+    """Resumen final: N hechos, N simulados y N saltados.
+
+    Si el motor devolvió el aviso de «no hay ficheros que cumplan el filtro»
+    (un «saltado» sin origen), se destaca antes del recuento.
+    """
+    if not resultados:
+        typer.echo("Aviso: la acción no produjo ningún resultado.", err=True)
+        return
+
+    vacio = next(
+        (
+            resultado
+            for resultado in resultados
+            if resultado.estado == "saltado"
+            and resultado.origen is None
+            and "No hay ficheros que cumplan el filtro" in resultado.mensaje
+        ),
+        None,
+    )
+    if vacio is not None:
+        consola_err.print(f"[yellow]Aviso:[/yellow] {escape(vacio.mensaje)}")
+
+    hechos = sum(1 for r in resultados if r.estado == "hecho")
+    simulados = sum(1 for r in resultados if r.estado == "simulado")
+    saltados = sum(1 for r in resultados if r.estado == "saltado")
+    partes: list[str] = []
+    if hechos:
+        partes.append(f"[green]{hechos} hecho(s)[/green]")
+    if simulados:
+        partes.append(f"[yellow]{simulados} simulado(s)[/yellow]")
+    if saltados:
+        partes.append(escape(f"{saltados} saltado(s)"))
+    recuento = ", ".join(partes) if partes else "nada que hacer"
+    consola.print(f"Resumen: {recuento}.")
+
+
 class NombresAccion:
     """Autocompletado de nombres de acción leyendo acciones.json.
 
@@ -326,7 +452,7 @@ class NombresAccion:
 
     def shell_complete(self, ctx: Any, incomplete: str) -> list[Any]:
         try:
-            lista = config.cargar(config.RUTA_ACCIONES)
+            lista = config.cargar(_ruta_config(ctx))
         except TareasError:
             return []
         return [
@@ -339,6 +465,7 @@ class NombresAccion:
 
 @app.command()
 def ejecutar(
+    ctx: typer.Context,
     nombre: Annotated[
         str,
         typer.Argument(
@@ -435,7 +562,7 @@ def ejecutar(
     ruta_navegador = buscar_navegador(navegador) if navegador else None
 
     try:
-        lista = config.cargar(RUTA_ACCIONES)
+        lista = config.cargar(_ruta_config(ctx))
     except TareasError as exc:
         _error(str(exc), codigo=exc.codigo_salida)
 
@@ -496,10 +623,8 @@ def ejecutar(
             )
         except TareasError as exc:
             _error(str(exc), codigo=exc.codigo_salida)
-        for resultado in resultados:
-            typer.echo(resultado.mensaje)
-            if not resultado.exito:
-                _error(resultado.mensaje, codigo=1)
+        _mostrar_simulacion(nombre, resultados)
+        _mostrar_resumen(resultados)
         return
 
     # --simular ya ha salido arriba; aquí solo falta no preguntar si se pidió --si.
@@ -540,3 +665,24 @@ def ejecutar(
         typer.echo(resultado.mensaje)
         if not resultado.exito:
             _error(resultado.mensaje, codigo=1)
+    _mostrar_resumen(resultados)
+
+    # «limpiar-usb» termina SIEMPRE avisando del reinicio obligatorio; se
+    # pregunta (y con --si se reinicia solo) salvo en --simular, que ya salió.
+    if tipo == "limpiar-usb":
+        if si:
+            _reiniciar_equipo()
+            return
+        if typer.confirm(
+            "El registro quedó limpio: hace falta REINICIAR (es obligatorio). "
+            "¿Reiniciar ahora?",
+            default=True,
+        ):
+            _reiniciar_equipo()
+        else:
+            consola_err.print(
+                "[yellow]Aviso:[/yellow] el reinicio queda PENDIENTE y es "
+                "obligatorio: hasta que reinicies, los USB pueden aparecer "
+                "en el registro otra vez. Ejecuta el reinicio a mano cuando "
+                "hayas guardado todo."
+            )

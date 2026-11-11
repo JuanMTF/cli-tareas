@@ -17,6 +17,13 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
   - `comprimir` → requiere `origen`, `filtro` y `destino`. Crea un .zip con los elegidos;
     el nombre es el de la carpeta `origen` salvo que la CLI pase `--nombre` (lo inyecta el
     motor como `nombre_zip` en la configuración). Nunca sobrescribe: `destino_libre`.
+  - `limpiar-usb` → requiere `puertos_conservar` (lista de nombres de puerto, ej. ["USB001","USB002"])
+    y `copia_seguridad` (ruta del .reg). Solo Windows y con permisos de administrador: limpia
+    del registro las huellas de USB e impresoras (Enum\USBSTOR, Enum\USB, MountPoints2,
+    desinstala impresoras y borra los puertos USB00x que no se conservan). Exporta antes una
+    copia .reg restaurable. La lógica vive en `acciones.py` (clase LimpiarUSB); el motor la
+    ejecuta sin ficheros (caso especial en `motor.py`). El reinicio obligatorio lo pregunta
+    la CLI al terminar (`--si` reinicia solo).
 - `confirmar` (bool, opcional): si es true, la CLI pregunta antes de ejecutar. En `borrar` se pregunta siempre.
 - filtro opcional: extensiones (lista, en minúsculas), patron (regex válida), mas_antiguo_que_dias, mayor_que_mb.
   - **Basta con UNO de los cuatro.** `{"mas_antiguo_que_dias": 400}` es un filtro válido y
@@ -34,6 +41,8 @@ description: Reglas del fichero acciones.json de la CLI tareas (campos, tipos, f
 - `tareas validar [FICHERO]` → comprueba el JSON; errores con código de salida 3.
 - `tareas acciones [NOMBRE]` → lista todas o muestra el detalle de una.
 - `tareas ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA] [--destino RUTA] [--antiguedad N] [--nombre TEXTO]` → ejecuta.
+  - Opción global `--config RUTA` (en el callback, va después de `tareas`): fichero JSON de
+    acciones; por defecto, el empaquetado `src/tareas/docs/acciones.json`.
   - La posición 2: si el tipo es `abrir`, es la URL (tiene que empezar por http/https); para el
     resto de tipos es la carpeta de origen. Indicarla en los dos sitios a la vez es error.
   - `--destino`/`-d RUTA` tiene prioridad sobre el `destino` del JSON (comprimir, copiar, mover,

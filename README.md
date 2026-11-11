@@ -40,6 +40,7 @@ tareas indexar C:\Users\yo\Downloads\DAM              # convierte los nuevos y a
 
 ### Opciones de `ejecutar`
 
+- `--config RUTA` (global: va después de `tareas` y antes de la orden) — fichero JSON de acciones. Por defecto, el empaquetado `src/tareas/docs/acciones.json`.
 - `--simular` — solo muestra qué haría: **no pregunta, no toca nada**.
 - `--si` — salta la confirmación. Imprescindible para borrar sin interacción.
 - `--carpeta RUTA` / `-c RUTA` — carpeta de origen; tiene prioridad sobre la del fichero. Admite `~`, `/` y `\`.
@@ -74,6 +75,7 @@ Definidas en `src/tareas/docs/acciones.json`; el esquema completo está en la sk
 | `transformar` | `origen`, `filtro`, `destino` | Convierte cada PDF en una carpeta con su HTML (ver «Manuales PDF → HTML»). |
 | `comprimir` | `origen`, `filtro`, `destino` | Crea un `.zip` con los ficheros y carpetas elegidos; el nombre es el de la carpeta origen (o el de `--nombre`). |
 | `copiar` | `origen`, `filtro`, `destino` | Copia ficheros y carpetas al destino sin borrar el original. |
+| `limpiar-usb` | `puertos_conservar`, `copia_seguridad` | Solo Windows + administrador: limpia del registro las huellas de USB e impresoras (ver «usb-del»). |
 
 **Nunca sobrescribe:** si en el destino ya hay algo con ese nombre, añade ` (1)`, ` (2)`... (`destino_libre`) y lo avisa con `(ya existía: renombrado)`.
 
@@ -133,7 +135,7 @@ Si borras `manuales.json`, lo vuelve a montar con lo que ya está convertido.
 
 ## Acciones definidas
 
-Fichero: `src/tareas/docs/acciones.json` (8 acciones válidas).
+Fichero: `src/tareas/docs/acciones.json` (9 acciones válidas).
 
 | Acción | Tipo | Qué hace |
 |--------|------|----------|
@@ -145,6 +147,34 @@ Fichero: `src/tareas/docs/acciones.json` (8 acciones válidas).
 | `ordenar-descargas` | mover | Mueve los PDF y documentos de Descargas a Documentos/PDF. |
 | `renombrar-fotos` | renombrar | Renombra fotos con su fecha. |
 | `transformar-pdf-html` | transformar | Convierte cada PDF en una carpeta con su HTML, páginas en imagen y texto buscable. |
+| `usb-del` | limpiar-usb | Limpia del registro las huellas de USB e impresoras (solo Windows, como administrador). |
+
+### `usb-del` (limpiar el registro de USB e impresoras)
+
+Solo Windows y con **permisos de administrador** (en otro sistema o sin
+elevar, error claro con código 1). Qué hace, en orden:
+
+1. **Copia de seguridad**: exporta con `reg.exe` las claves que va a tocar a
+   un único `.reg` restaurable (`copia_seguridad` del JSON; por defecto
+   `~/pruebas-tareas/usb-backup.reg`).
+2. **Desinstala las impresoras de verdad** (`Remove-Printer`) y vacía su clave
+   de conexiones `SOFTWARE\...\CurrentVersion\Print\Printers`.
+3. **Puertos USB**: borra de `SOFTWARE\...\CurrentVersion\Ports` los `USB00x`
+   que no estén en `puertos_conservar` (por defecto se conservan `USB001` y `USB002`).
+4. **Historial de USB**: vacía `Enum\USBSTOR`, `Enum\USB` y `MountPoints2`.
+5. **Reinicio obligatorio**: avisa al empezar, y al terminar pregunta si
+   reiniciar ya (con `--si` reinicia solo; con `shutdown /r`). Si respondes
+   que no, deja el aviso en pantalla: **hasta reiniciar, Windows puede
+   reescribir las claves**.
+
+```bash
+uv run tareas ejecutar usb-del --simular    # lista qué tocaría, sin tocar nada
+uv run tareas ejecutar usb-del              # pide confirmación y pregunta el reinicio
+```
+
+Las claves de `SYSTEM\Enum` pertenecen a SYSTEM: si alguna se resiste, la
+acción lo reporta como «saltado» y no aborta; la copia `.reg` permite volver
+atrás desde regedit (a ser necesario con psexec -s).
 
 ## Seguridad
 
