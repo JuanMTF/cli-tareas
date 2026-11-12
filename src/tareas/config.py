@@ -48,6 +48,30 @@ CAMPOS_OPCIONALES_POR_TIPO: dict[str, tuple[str, ...]] = {
 # nombre en kebab-case: minúsculas, números, guiones, tildes y espacios. Ej.: abrir-nav
 _NOMBRE_KEBAB = re.compile(r"^[a-z0-9áéíóúüñ]+(?:[ -áéíóúüñ][a-z0-9áéíóúüñ]+)*$")
 
+# json.JSONDecodeError explica el fallo en inglés (exc.msg): se traducen los
+# textos que puede soltar la librería estándar. Si algún día aparece uno nuevo,
+# se muestra tal cual en inglés (nunca un traceback).
+_MENSAJES_JSON_ES: dict[str, str] = {
+    "Expecting value": "se esperaba un valor",
+    "Expecting property name enclosed in double quotes": (
+        "se esperaba el nombre de la propiedad entre comillas dobles"
+    ),
+    "Expecting property name enclosed in single quotes": (
+        "se esperaba el nombre de la propiedad entre comillas simples"
+    ),
+    "Expecting ',' delimiter": "se esperaba una coma (,)",
+    "Expecting ':' delimiter": "se esperaban los dos puntos (:)",
+    "Unterminated string starting at": "hay una cadena sin cerrar (empezó aquí)",
+    "Invalid control character at": "hay un carácter de control no válido",
+    "Invalid \\escape": "hay una secuencia de escape no válida",
+    "Extra data": "hay datos de más después del JSON",
+}
+
+
+def _mensaje_json(msg: str) -> str:
+    """Traduce al español el motivo del fallo que da la librería json."""
+    return _MENSAJES_JSON_ES.get(msg, msg)
+
 
 def cargar(ruta: Path) -> list[dict[str, Any]]:
     """Lee el JSON y devuelve la lista de acciones.
@@ -58,8 +82,16 @@ def cargar(ruta: Path) -> list[dict[str, Any]]:
     if ruta.exists() and not ruta.is_file():
         raise ConfigError(f"{ruta}: no es un fichero, parece una carpeta.")
 
+    # utf-8-sig: igual que utf-8, pero si el fichero empieza por BOM (lo
+    # escriben así el Bloc de notas o PowerShell con -Encoding UTF8) lo quita
+    # en vez de fallar. Sin BOM funciona exactamente igual.
     try:
-        texto = ruta.read_text(encoding="utf-8")
+        texto = ruta.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        raise ConfigError(
+            f"{ruta}: no se puede leer como UTF-8 (parece estar en otra "
+            "codificación, p. ej. ANSI). Vuelve a guardarlo como UTF-8."
+        ) from None
     except OSError as exc:
         raise ConfigError(f"No se pudo leer {ruta}: {exc}") from exc
 
@@ -67,7 +99,8 @@ def cargar(ruta: Path) -> list[dict[str, Any]]:
         datos = json.loads(texto)
     except json.JSONDecodeError as exc:
         raise ConfigError(
-            f"JSON inválido en {ruta} (línea {exc.lineno}, columna {exc.colno}): {exc.msg}"
+            f"JSON inválido en {ruta} (línea {exc.lineno}, columna {exc.colno}): "
+            f"{_mensaje_json(exc.msg)}"
         ) from exc
 
     if not isinstance(datos, dict):

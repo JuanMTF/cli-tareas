@@ -14,10 +14,12 @@
 # Uso:
 #   powershell -ExecutionPolicy Bypass -File .\pruebas.ps1
 #   powershell -ExecutionPolicy Bypass -File .\pruebas.ps1 -SoloSimular
-# (o doble clic en ejecutartareas.bat, en esta misma carpeta)
+#   powershell -ExecutionPolicy Bypass -File .\pruebas.ps1 -Interactivo
+# (o doble clic en ejecutartareas.bat, en esta misma carpeta; -i = interactivo)
 
 param(
-    [switch]$SoloSimular  # con -SoloSimular no se ejecuta nada real, todo con --simular
+    [switch]$SoloSimular,  # con -SoloSimular no se ejecuta nada real, todo con --simular
+    [switch]$Interactivo   # con -Interactivo, tras cada paso OK pregunta si ha salido bien a la vista
 )
 
 $ErrorActionPreference = "Continue"
@@ -39,23 +41,49 @@ function Paso {
         Write-Host ("  FALLO {0}" -f $Nombre) -ForegroundColor Red
         if ($Detalle) { Write-Host ("       {0}" -f $Detalle) -ForegroundColor Yellow }
     }
+
+    # Auditoria humana (-Interactivo): la maquina dice OK, pero las tablas de
+    # rich y los ficheros creados solo se ven bien con ojos. El auditor puede
+    # parar, mirar el sandbox y responder; un "n" convierte el paso en fallo.
+    # La pregunta va con Write-Host: con stdin redirigido el prompt de
+    # Read-Host no se pinta y la pregunta desapareceria.
+    if ($Ok -and $script:Interactivo) {
+        Write-Host "       A la vista, ha salido OK? (s/n) [s] " -ForegroundColor Cyan -NoNewline
+        $veredicto = Read-Host
+        if ($veredicto -match '^[nN]') {
+            $script:fallos++
+            Write-Host "       Marcado FALLO por el auditor" -ForegroundColor Yellow
+        }
+    }
 }
 
 function Tareas {
     # Ejecuta "uv run cliWork ..." y devuelve salida + codigo de salida.
+    # Con -Interactivo pinta la salida COMPLETA (tablas rich incluidas) para
+    # que el auditor la verifique a la vista antes de responder s/n.
     param([string[]]$Argumentos)
     $salida = & uv run cliWork @Argumentos 2>&1
+    if ($script:Interactivo) {
+        Write-Host ""
+        $salida | ForEach-Object { Write-Host ("    {0}" -f $_) }
+        Write-Host ""
+    }
     [PSCustomObject]@{ Texto = ($salida -join "`n"); Codigo = $LASTEXITCODE }
 }
 
 Write-Host "=== Bateria de pruebas de cliWork ===" -ForegroundColor Cyan
-Write-Host ("Modo: {0}" -f ($(if ($SoloSimular) { "solo simulacion" } else { "simulacion + acciones reales (solo en el sandbox)" })))
+$modo = "simulacion + acciones reales (solo en el sandbox)"
+if ($SoloSimular) { $modo = "solo simulacion" }
+if ($Interactivo) { $modo = "{0} + auditoria interactiva (pregunta a la vista)" -f $modo }
+Write-Host ("Modo: {0}" -f $modo)
 Write-Host ""
 
 # --- 1. Tests unitarios -----------------------------------------------------
 
 Write-Host "[1] pytest"
-$pytest = & uv run pytest -q 2>&1
+# --basetemp fijo: sin el, el limpiado de temporales de pytest da
+# PermissionError en Windows al cerrar la sesion y parece que fallan los tests.
+$pytest = & uv run pytest -q --basetemp "$env:TEMP\tareas-pytest-bateria" 2>&1
 Paso "pytest pasa los tests" ($LASTEXITCODE -eq 0) (($pytest | Select-Object -Last 1) -join "")
 
 # --- 2. Ordenes basicas -----------------------------------------------------
@@ -70,6 +98,16 @@ Paso "validar dice 'acciones validas' y sale 0" (($val.Codigo -eq 0) -and ($val.
 
 $acc = Tareas @("acciones")
 Paso "acciones lista al menos abrir-nav y ordenar-descargas" (($acc.Codigo -eq 0) -and ($acc.Texto -match "abrir-nav") -and ($acc.Texto -match "ordenar-descargas"))
+
+# La ayuda: la tabla rich con los 6 comandos tiene que salir completa
+# (version, listar, acciones, validar, indexar y ejecutar).
+$ayuda = Tareas @("--help")
+Paso "la ayuda lista los 6 comandos" (
+    ($ayuda.Codigo -eq 0) -and
+    ($ayuda.Texto -match "version") -and ($ayuda.Texto -match "listar") -and
+    ($ayuda.Texto -match "acciones") -and ($ayuda.Texto -match "validar") -and
+    ($ayuda.Texto -match "indexar") -and ($ayuda.Texto -match "ejecutar")
+)
 
 # JSON roto: tiene que saltar con codigo 3 y sin traceback
 $rupta = Join-Path $env:TEMP "tareas-prueba-roto.json"
@@ -105,6 +143,14 @@ Paso "sandbox creado con ficheros de ejemplo" ((Test-Path (Join-Path $origen "do
 # listar con ruta que lleva espacios y tilde: tiene que funcionar igual
 $lst = Tareas @("listar", $sb)
 Paso "listar ve el sandbox" (($lst.Codigo -eq 0) -and ($lst.Texto -match "origen"))
+
+# La tabla rich de listar tiene que llevar sus cabeceras (tabla bien creada)
+Paso "la tabla de listar lleva cabeceras Nombre/Tipo/Modificado" (
+    ($lst.Codigo -eq 0) -and
+    ($lst.Texto -match "Nombre") -and
+    ($lst.Texto -match "Tipo") -and
+    ($lst.Texto -match "Modificado")
+)
 
 # --- 4. Acciones ------------------------------------------------------------
 
@@ -226,6 +272,34 @@ if ($SoloSimular) {
     Paso "abrir-nav --simular anuncia SIMULACION y no pide confirmacion" (($ab.Codigo -eq 0) -and ($ab.Texto -match "SIMULACI.N"))
     $patron = "{0} pesta.as" -f $urlsJson
     Paso ("abrir-nav --simular cuenta las {0} URLs del JSON" -f $urlsJson) (($ab.Codigo -eq 0) -and ($ab.Texto -match $patron)) ("pesta.as seg.un JSON: {0}" -f $urlsJson)
+    # 4.9 transformar-pdf-html REAL (solo aqui, no en -SoloSimular): convierte
+    #     un PDF de verdad creado con pymupdf y verifica los ficheros que
+    #     crea: carpeta del manual con sus paginas PNG, su index.html, la
+    #     galeria y manuales.json. Todo con -d dentro del sandbox: nunca en
+    #     la carpeta real de Descargas.
+    $origenTrans = Join-Path $sb "origen-transformar"
+    $destinoTrans = Join-Path $sb "html-transformado"
+    New-Item -ItemType Directory -Force -Path $origenTrans, $destinoTrans | Out-Null
+    $pdfReal = Join-Path $origenTrans "manual-bateria.pdf"
+    & uv run python "pruebas\crear_pdf_prueba.py" $pdfReal | Out-Null
+    Paso "PDF real de prueba creado con pymupdf" ((Test-Path $pdfReal) -and ((Get-Item $pdfReal).Length -gt 500))
+
+    $trReal = Tareas @("ejecutar", "transformar-pdf-html", $origenTrans, "-d", $destinoTrans, "--si")
+    Paso "transformar real termina con codigo 0" ($trReal.Codigo -eq 0) $trReal.Texto
+
+    $manual = Join-Path $destinoTrans "manual-bateria"
+    Paso "crea la carpeta del manual con pagina-01.png" (Test-Path (Join-Path $manual "pagina-01.png"))
+    Paso "crea el index.html del manual" (Test-Path (Join-Path $manual "index.html"))
+    $galeria = Join-Path $destinoTrans "index.html"
+    Paso "crea la galeria index.html que lista el manual" (
+        (Test-Path $galeria) -and
+        ((Get-Content $galeria -Raw) -match "manual-bateria")
+    )
+    $registro = Join-Path $destinoTrans "manuales.json"
+    Paso "crea manuales.json con el registro del manual" (
+        (Test-Path $registro) -and
+        ((Get-Content $registro -Raw) -match "manual-bateria")
+    )
 }
 
 # --- 5. Resumen -------------------------------------------------------------

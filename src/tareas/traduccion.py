@@ -98,6 +98,10 @@ REGLAS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^Missing option"), "Falta la opción"),
     (re.compile(r"^Missing parameter"), "Falta el parámetro"),
     (
+        re.compile(r"^Option '(?P<opcion>--[^']+)' requires an argument\.$"),
+        r"La opción '\g<opcion>' necesita un valor.",
+    ),
+    (
         re.compile(r"^Try '(?P<comando>[^']+)' for help\."),
         r"Prueba '\g<comando>' para ver la ayuda.",
     ),

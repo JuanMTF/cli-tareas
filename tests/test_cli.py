@@ -57,6 +57,37 @@ def test_validar_json_roto_da_3(tmp_path: Path) -> None:
     assert "JSON inválido" in _texto(resultado)
 
 
+def test_validar_json_con_bom_carga_igual(tmp_path: Path) -> None:
+    """Los ficheros escritos con el Bloc de notas o PowerShell llevan BOM: se admiten."""
+    bom = tmp_path / "bom.json"
+    bom.write_text('{"version": 1, "acciones": []}', encoding="utf-8-sig")
+    resultado = runner.invoke(app, ["validar", str(bom)])
+    assert resultado.exit_code == 0
+    assert "acciones válidas" in _texto(resultado)
+
+
+def test_validar_json_roto_mensaje_en_espanol(tmp_path: Path) -> None:
+    """El motivo del fallo se traduce: nada de 'Expecting value' en inglés."""
+    roto = tmp_path / "roto.json"
+    roto.write_text('{"version": 1, "acciones": [', encoding="utf-8")
+    resultado = runner.invoke(app, ["validar", str(roto)])
+    assert resultado.exit_code == 3
+    texto = _texto(resultado)
+    assert "se esperaba" in texto
+    assert "Expecting" not in texto
+
+
+def test_validar_codificacion_no_utf8_da_3_sin_traceback(tmp_path: Path) -> None:
+    """Un JSON guardado en ANSI (byte 0xF1 no válido en UTF-8) da error limpio."""
+    raro = tmp_path / "ansi.json"
+    raro.write_bytes(b'{"version": 1, "acciones": ["\xf1"]}')
+    resultado = runner.invoke(app, ["validar", str(raro)])
+    assert resultado.exit_code == 3
+    texto = _texto(resultado)
+    assert "JSON inválido" in texto or "UTF-8" in texto
+    assert "Traceback" not in texto
+
+
 def test_validar_fichero_inexistente_da_3(tmp_path: Path) -> None:
     resultado = runner.invoke(app, ["validar", str(tmp_path / "no.json")])
     assert resultado.exit_code == 3

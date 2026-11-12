@@ -397,10 +397,51 @@ Estado actual del repo:
 **Diffs que rechacé o deshice (/undo) y por qué:** Le pedimos que busque el codigo en internet y lo encuentra y lo adapta la ia a nuestras necesidades , Se revisa que en linux y en Mac estos problemas aunque se registran los usb no es tan comun y es mas complicado el borrado por lo que se opta por no realizar esa parte.
 
 
-**Funcionaba a la primera:** 
+**Funcionaba a la primera:**
+Si funciona a la primera he hecho yo la simulacion y va ok, Le he pedido que me la añada a bateria de pruebas y va ok. 
 
 
-**Qué aprendí:** 
+**Qué aprendí:**   se trabaja 1 trabajo a la vez y es mas eficiente.
+
+### Prompt 2
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+/nueva-accion renombrar-capturas "renombra capturas de pantalla con su fecha"  quiero que se pueda poner un nombre generico y seleccionar  la carpeta que modifique las capturas. Me explico, Tengo una aplicacion que me hace capturas de pantalla cada tiempo programado y las capturas van a una carpeta que le digo , si ponemos esas opciones le puedo indicar -r ruta, -n  nombre y el formato seria Nombre_fecha.
+
+**Qué corregí del plan:** 
+Le indico que me ponga opciones para seleccionar otros nombres y otras rutas donde tengas capturas de pantalla. -r rutas -n nombre.
+Tambien He pensado que seria bueno poder configurar las rutas de defecto de los comandos para personalizar cada uno lo que mas use para no tener que teclear las rutas cada vez.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+Le modifico el nombre del fichero  era muy largo .
+
+
+**Funcionaba a la primera:**
+Si funciona a la primera he hecho yo la simulacion y va ok, Le he pedido que me la añada a bateria de pruebas y va ok. 
+
+
+**Qué aprendí:**   se trabaja 1 trabajo a la vez y es mas eficiente.
+
+## 12-11-2026 Sigo el tutorial de edu:
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+Pido a la Ia que me añada en el ejecutar.bat una funcion para que muestre los resultados en pantaña para comprobar el estado de las pruebas. 
+
+**Qué corregí del plan:**  
+me ponia un comando largo le indique que pusiera -i (interactividad) asi sale en pantalla los comandos que lanza lo revisas y le das al enter si esta ok y n si esta mal y los reportamos el fallo .
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+salio un fallo en el comando --config que se usa para configurar las rutas de defecto.
+
+**Funcionaba a la primera:**
+
+las pruebas echas si funcionan
+
+**Qué aprendí:**  
+que se hace paso a paso y pedir tarbajos sencillos
 
 
 

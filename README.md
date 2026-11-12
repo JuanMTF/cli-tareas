@@ -51,6 +51,8 @@ cliWork indexar C:\Users\yo\Downloads\DAM              # convierte los nuevos y 
 - `--google` / `-g`, `--firefox` / `-f`, `--edge` / `-e` — navegador (solo tipo `abrir`).
 
 ```bash
+uv run cliWork --config ~/mi-acciones.json validar                     # otro fichero de acciones: global, antes de la orden
+uv run cliWork --config ~/mi-acciones.json ejecutar ordenar-descargas ~/pruebas-tareas --simular
 uv run cliWork ejecutar ordenar-descargas ~/pruebas-tareas --simular   # carpeta en posición 2
 uv run cliWork ejecutar abrir-nav https://github.com --simular         # URL en posición 2
 uv run cliWork ejecutar comprimir-antiguos -n 10 --simular             # lo de más de 10 días
@@ -198,6 +200,16 @@ uv run cliWork ejecutar renombrar-capturas -r ~/pruebas-tareas --simular # otra 
 uv run cliWork ejecutar renombrar-capturas -N Capturas                   # real, con confirmación
 ```
 
+## Mejoras pendientes (auditoría del Paso 8)
+
+- **`renombrar` con `--simular` no detecta colisiones dentro de la misma pasada.**
+  Si dos ficheros salen con el mismo destino (p. ej. dos fotos del mismo día con una
+  plantilla sin `{n}`), la simulación enseña el mismo destino en las dos filas sin
+  avisar. Al ejecutar de verdad no se pierde nada: el segundo se renombra con « (1)»
+  (`destino_libre` mira el disco, y en simulación el primero aún no existe).
+  Mejora: que la simulación recuerde los destinos ya planeados y marque la fila
+  como «colisión» en la tabla.
+
 ## Seguridad
 
 **Nunca hará:** borrar sin preguntar ni tocar ficheros fuera de la carpeta que le indique.
@@ -208,6 +220,7 @@ uv run cliWork ejecutar renombrar-capturas -N Capturas                   # real,
 - Ejecutar: `uv run cliWork --help`.
 - Validar config: `uv run cliWork validar`.
 - Tests: `uv run pytest`.
+- Auditoría del Paso 8 (sandbox en `~/pruebas-tareas/auditoria`): `powershell -ExecutionPolicy Bypass -File .\pruebas\auditoria.ps1`.
 
 ### Instalado en el PATH (`uv tool`)
 

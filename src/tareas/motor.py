@@ -16,7 +16,13 @@ class Motor:
     """Ejecuta las acciones del fichero: las busca, selecciona y ejecuta."""
 
     def __init__(self, acciones: list[dict[str, Any]]) -> None:
-        self.acciones = {a["nombre"]: Accion.desde_config(a) for a in acciones}
+        # Configuración prístina del JSON: cada ejecución monta su Accion
+        # desde aquí, para que las opciones de una ejecución (--nombre,
+        # --antiguedad) no sobrevivan a la siguiente si el Motor se reutiliza.
+        self._bruto = {a["nombre"]: a for a in acciones}
+        self.acciones = {
+            nombre: Accion.desde_config(a) for nombre, a in self._bruto.items()
+        }
 
     @property
     def destructivas(self) -> set[str]:
@@ -78,6 +84,12 @@ class Motor:
             detalle = f" ¿Quisiste decir «{sugerencias[0]}»?" if sugerencias else ""
             raise TareasError(f"No existe la acción: {nombre}.{detalle}")
 
+        # Se monta una Accion NUEVA desde el JSON prístino: así lo que se
+        # inyecte abajo (nombre_zip, nombre_generico, filtro) vive solo en
+        # esta ejecución y no queda pisado en el Motor para la siguiente.
+        accion = Accion.desde_config(self._bruto[nombre])
+        self.acciones[nombre] = accion
+
         tipo = accion.config.get("tipo")
 
         if nombre_zip:
@@ -86,9 +98,10 @@ class Motor:
                     "La opción --nombre solo sirve para acciones de tipo "
                     "«comprimir» (el .zip) o «renombrar» (el nombre genérico)."
                 )
-            # Se copia la configuración (no se pisa la original) y solo para
-            # esta ejecución: Comprimir lee «nombre_zip» y Renombrar usa
-            # «nombre_generico» para el hueco {base} de su plantilla.
+            # Se deja en la copia de ESTA ejecución: Comprimir lee
+            # «nombre_zip» y Renombrar usa «nombre_generico» para el hueco
+            # {base} de su plantilla. Como arriba se montó una Accion nueva
+            # desde el JSON prístino, este valor no sobrevive a la ejecución.
             if tipo == "comprimir":
                 accion.config = {**accion.config, "nombre_zip": nombre_zip}
             else:

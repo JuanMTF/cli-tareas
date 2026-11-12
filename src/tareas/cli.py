@@ -62,7 +62,12 @@ def principal(
         Path,
         typer.Option(
             "--config",
-            help="Fichero JSON de acciones. Por defecto, el empaquetado. Admite ~.",
+            help=(
+                "Fichero JSON de acciones. Opción GLOBAL: va justo después de "
+                "«cliWork», con su valor, y ANTES de la orden "
+                "(ej.: cliWork --config ~/mi-acciones.json validar). "
+                "Por defecto, el empaquetado. Admite ~."
+            ),
             show_default=False,
             metavar="",
         ),
@@ -126,7 +131,12 @@ def version() -> None:
     typer.echo(f"cliWork {tareas.__version__}")
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Ejemplos: cliWork listar ~/pruebas-tareas   ·   la carpeta admite ~ y "
+        "se escribe entre comillas si lleva espacios: cliWork listar \"~/mi carpeta\"."
+    )
+)
 def listar(
     carpeta: Annotated[
         Path,
@@ -187,7 +197,13 @@ def listar(
     consola.print(tabla)
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Con NOMBRE muestra el detalle de esa acción (tipo, filtro, origen...): "
+        "cliWork acciones ordenar-descargas.   ·   El fichero de acciones se "
+        "cambia con la opción global --config (va antes de la orden)."
+    )
+)
 def acciones(
     ctx: typer.Context,
     nombre: Annotated[
@@ -255,7 +271,13 @@ def _mostrar_detalle(accion: dict[str, Any]) -> None:
     consola.print(tabla)
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Ejemplos: cliWork validar (el JSON empaquetado, o el de --config)   ·   "
+        "cliWork validar ~/mi-acciones.json (otro fichero).   ·   Si algo falla, "
+        "dice cada error y sale con el código 3."
+    )
+)
 def validar(
     ctx: typer.Context,
     fichero: Annotated[
@@ -316,7 +338,14 @@ def _destino_transformar() -> Path | None:
     return None
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Ejemplos: cliWork indexar ~/Downloads/DAM --simular (solo mira qué "
+        "haría: no convierte ni escribe nada)   ·   cliWork indexar "
+        "~/Downloads/DAM (convierte y actualiza manuales.json)   ·   el destino "
+        "se cambia con -d/--destino (por defecto, el del JSON)."
+    )
+)
 def indexar(
     carpeta: Annotated[
         str,
@@ -463,7 +492,13 @@ class NombresAccion:
         ]
 
 
-@app.command()
+@app.command(
+    epilog=(
+        "Opción global --config: el fichero de acciones se pasa justo después de "
+        "«cliWork», con su valor, y antes de la orden "
+        "(ej.: cliWork --config ~/mi-acciones.json ejecutar ordenar-descargas --simular)."
+    )
+)
 def ejecutar(
     ctx: typer.Context,
     nombre: Annotated[
