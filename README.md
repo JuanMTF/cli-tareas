@@ -216,6 +216,7 @@ uv run cliWork ejecutar renombrar-capturas -N Capturas                   # real,
 
 ## Desarrollo
 
+- Instalación de un solo paso en Ubuntu: `chmod +x setup.sh && ./setup.sh` (instala uv si falta, dependencias y `cliWork` en el PATH).
 - Instalar/sincronizar dependencias: `uv sync`.
 - Ejecutar: `uv run cliWork --help`.
 - Validar config: `uv run cliWork validar`.
