@@ -66,7 +66,7 @@ mismo nombre, lo renombra con ` (1)`, ` (2)`... y lo dice en el mensaje
 ## Tipos de acción
 
 Definidas en `src/tareas/docs/acciones.json`; el esquema completo está en la skill
-`.opencode/skills/actions-json/skill.md`.
+`.opencode/skills/acciones-json/skill.md`.
 
 | Tipo | Campos necesarios | Qué hace |
 |------|-------------------|----------|
