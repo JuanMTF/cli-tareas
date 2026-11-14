@@ -443,5 +443,60 @@ las pruebas echas si funcionan
 **Qué aprendí:**  
 que se hace paso a paso y pedir tarbajos sencillos
 
+## 13-11-2026 Sigo el tutorial de edu:
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):** 
+Usa context7: en httpx 0.28, ¿cómo le paso a httpx.post un certificado de CA propio (fichero .crt)? Responde en 4 líneas con un ejemplo.
+uv run python -W always -c "import httpx; httpx.get(URL, verify='ca-ies-simarro.crt')"
+
+**Qué corregí del plan:** 
+me decia la uno y tube que elegir yo la 2
+
+**Diffs que rechacé o deshice (/undo) y por qué:**  era una prueba de conexion del MCp 
+
+**Funcionaba a la primera:** 
+si funciona
+
+**Qué aprendí:**  que las herramientas son caras
+
+### Prompt 2
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+Carga la skill acciones-json y lee @src/tareas/errores.py y @pyproject.toml.
+Quiero una capa IA aparte, en src/tareas/ia.py:
+- Respuesta (texto, tokens_entrada, tokens_salida, segundos);
+- ProveedorIA, clase abstracta con completar(sistema, usuario, max_tokens);
+- ProveedorCentro(ProveedorIA) con httpx: POST {url}/chat/completions (API de OpenAI);
+- ProveedorCentro.desde_entorno(): CENTRO_IA_URL, CENTRO_IA_KEY, CENTRO_IA_MODELO
+  y CENTRO_IA_CA, leyendo antes un .env con python-dotenv.
+No toques nada todavía: dime qué errores puede dar httpx al llamar al servidor
+y qué mensaje en español le darías a cada uno.
+
+Hazlo según el plan. Criterio de aceptación:
+- uv add httpx python-dotenv (nada más).
+- IANoDisponible(TareasError) en errores.py, con codigo_salida = 4.
+- Sin clave, sin red, sin certificado, 401, 429 o tiempo agotado
+  → IANoDisponible con un mensaje en español. Nunca un traceback.
+- El certificado: ssl.create_default_context y verify=contexto
+  (verify="ruta" está obsoleto en httpx 0.28).
+- La clave nunca se imprime ni se escribe en ningún fichero.
+- Orden «tareas comprobar-ia»: servidor, modelo, «clave: definida» y una
+  pregunta mínima al modelo (max_tokens 5).
+Termina con: uv run tareas comprobar-ia
+
+**Qué corregí del plan:** 
+este Prompt lo pasa edu marca los errores que puede salir sale incluso el 429 que nos indican que revisemos.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+no se tine que revisar nada en el primer tramo y el segundo funciona ok
+
+**Funcionaba a la primera:**
+funciona a la primera
+
+**Qué aprendí:**  estamos configurando el mcp y opnecode para que trabaje de forma eficiente y segura
+
 
 

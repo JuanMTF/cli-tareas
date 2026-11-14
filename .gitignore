@@ -8,5 +8,6 @@ dist/
 
 # Secretos: claves de API y configuración privada. NUNCA al repo.
 .env
+.env.example
 IAPasos.md
 testarealizarJuan.md

@@ -25,5 +25,19 @@
   },
   "agent": {
     "plan": { "permission": { "edit": "deny" } }
+  },
+  "mcp":{
+    "servers": {
+      "context7": {
+        "type": "remote",
+        "url": "https://mcp.context7.com/mcp",
+        "disabled": true
+      },
+      "apuntes": {
+        "type": "local",
+        "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "./docs"],
+        "disabled": true
+      }
+    }
   }
 }

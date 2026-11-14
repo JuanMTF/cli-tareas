@@ -36,6 +36,7 @@ from tareas.acciones import (
     validar_acciones,
 )
 from tareas.errores import ConfigError, TareasError
+from tareas.ia import SISTEMA_PRUEBA, ProveedorCentro
 from tareas.motor import Motor
 
 consola = Console()
@@ -308,6 +309,40 @@ def validar(
         raise typer.Exit(code=ConfigError.codigo_salida)
 
     consola.print(f"[green]✔ {len(acciones)} acciones válidas[/green]")
+
+
+@app.command(
+    epilog=(
+        "Comprueba por este orden: configuración, servidor, modelo y una "
+        "pregunta mínima (max_tokens 5). La configuración va en el fichero "
+        ".env (mira .env.example). Si algo falla, sale con el código 4."
+    )
+)
+def comprobar_ia() -> None:
+    """Comprueba la conexión con el servidor de IA del centro."""
+    try:
+        proveedor = ProveedorCentro.desde_entorno()
+    except TareasError as exc:
+        _error(str(exc), codigo=exc.codigo_salida)
+
+    consola.print(f"Servidor:    [cyan]{escape(proveedor.url)}[/cyan]")
+    consola.print(f"Modelo:      [cyan]{escape(proveedor.modelo)}[/cyan]")
+    consola.print("[green]Clave:       definida[/green]")
+    if proveedor.ca:
+        consola.print(f"Certificado: [cyan]{escape(proveedor.ca)}[/cyan]")
+    else:
+        consola.print("Certificado: ninguno (confía en los certificados del sistema)")
+
+    consola.print("Pregunta mínima al modelo (max_tokens 5)...")
+    try:
+        respuesta = proveedor.completar(
+            SISTEMA_PRUEBA, "Responde solo: OK", max_tokens=5
+        )
+    except TareasError as exc:
+        _error(str(exc), codigo=exc.codigo_salida)
+
+    consola.print(f"[green]✔ Respuesta del modelo: {escape(respuesta.texto.strip())}[/green]")
+    consola.print(respuesta.resumen())
 
 
 def _reiniciar_equipo() -> None:

@@ -1,4 +1,4 @@
-"""Errores de tareas: base, configuración y acciones no válidas."""
+"""Errores de tareas: base, configuración, acciones no válidas e IA no disponible."""
 
 from __future__ import annotations
 
@@ -27,3 +27,15 @@ class AccionNoValida(ConfigError):
         nombre = accion.get("nombre") if isinstance(accion, dict) else None
         etiqueta = f"«{nombre}»" if isinstance(nombre, str) and nombre else "«sin nombre»"
         super().__init__(f"Acción {etiqueta}, campo «{campo}»: {motivo}")
+
+
+class IANoDisponible(TareasError):
+    """La capa de IA no puede usarse ahora (config, red, certificado, servidor...).
+
+    Cualquier fallo del proveedor (sin clave, sin red, certificado que no
+    valida, 401, 429, tiempo agotado, respuesta con otro formato) se traduce
+    aquí con un mensaje humano: la CLI lo imprime sin traceback y sale con 4,
+    y las acciones sin IA siguen funcionando.
+    """
+
+    codigo_salida = 4
