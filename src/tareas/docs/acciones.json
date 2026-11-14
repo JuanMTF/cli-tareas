@@ -86,6 +86,43 @@
       "origen": "C:/Users/juant/OneDrive/Imágenes/Screenshots",
       "filtro": { "extensiones": [".png", ".jpg", ".jpeg"] },
       "plantilla": "{base}_{n}_{fecha:%Y-%m-%d_%H-%M}{ext}"
+    },
+    {
+      "nombre": "resumir-apuntes",
+      "descripcion": "Resume cada PDF de apuntes en un .md para estudiar",
+      "tipo": "resumir",
+      "filtro": { "extensiones": [".pdf", ".txt", ".md"] },
+      "destino": "~/pruebas-tareas/Resúmenes",
+      "instrucciones": "Resume en 5 viñetas como máximo. Acaba con una línea que empiece por «Para el examen:» y diga, en una frase, lo que más cuenta.",
+      "max_caracteres": 120000
+    },
+    {
+      "nombre": "limpiar-ocr",
+      "descripcion": "Corrige el texto roto del OCR (errores, palabras partidas) y lo deja organizado en un .md",
+      "tipo": "resumir",
+      "filtro": { "extensiones": [".txt", ".md"] },
+      "destino": "~/pruebas-tareas/TextoLimpio",
+      "instrucciones": "Este texto sale de un OCR y está roto: corrige los errores, une las palabras partidas y organiza el texto en párrafos con títulos de sección en markdown. No inventes contenido que no esté en el texto. Devuelve el texto corregido.",
+      "max_caracteres": 12000
+    },
+    {
+      "nombre": "renombrar-descriptivo",
+      "descripcion": "Propone para cada fichero un nombre corto y descriptivo según su contenido (la IA propone; el renombrado real se aplicara despues)",
+      "tipo": "resumir",
+      "filtro": { "extensiones": [".pdf", ".txt"] },
+      "destino": "~/pruebas-tareas/NombresIA",
+      "instrucciones": "A partir del texto del documento, propón un nombre de fichero en kebab-case, en español, de 3 a 6 palabras, sin barras ni fechas raras. Responde SOLO con el nombre, sin extensión ni explicación.",
+      "max_caracteres": 6000
+    },
+    {
+      "nombre": "clasificar-descargas",
+      "descripcion": "Propone en qué subcarpeta va cada fichero según su contenido (solo informa; el movimiento real se haria con mover)",
+      "tipo": "resumir",
+      "filtro": { "extensiones": [".pdf", ".txt"] },
+      "destino": "~/pruebas-tareas/ClasificacionIA",
+      "instrucciones": "Di a qué carpeta pertenece este documento. Responde SOLO con el nombre de la carpeta, sin explicación.",
+      "categorias": ["facturas", "apuntes", "manuales", "otros"],
+      "max_caracteres": 4000
     }
   ]
 }

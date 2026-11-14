@@ -17,7 +17,17 @@ RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
 TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
-                   "comprimir", "copiar", "limpiar-usb")
+                   "comprimir", "copiar", "limpiar-usb", "resumir")
+
+# Tipos que consultan al proveedor de IA (ProveedorCentro, en ia.py): el
+# motor les inyecta el proveedor y, con --simular, no se llama al modelo.
+TIPOS_IA = ("resumir",)
+
+# Límites del campo «max_caracteres» de las acciones IA (cuánto texto del
+# fichero se manda como máximo al modelo).
+MAX_CARACTERES_MIN = 500
+MAX_CARACTERES_MAX = 50000
+MAX_CARACTERES_DEFECTO = 12000
 
 # Campos que puede llevar cualquier acción.
 CAMPOS_COMUNES = ("nombre", "descripcion", "tipo", "confirmar")
@@ -34,6 +44,10 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     # Limpieza del registro de Windows (huellas de USB): conserva esos puertos
     # USB00x del JSON y guarda antes una copia .reg en la ruta indicada.
     "limpiar-usb": ("puertos_conservar", "copia_seguridad"),
+    # Acción IA: el texto a mandar y las instrucciones van en el JSON. La
+    # carpeta origen la pasa la CLI (o el JSON); sin destino, el resumen se
+    # escribe junto al fichero.
+    "resumir": ("filtro", "instrucciones"),
 }
 
 # Campos que se reconocen dentro de 'filtro'.
@@ -43,6 +57,9 @@ FILTRO_CONOCIDO = ("extensiones", "patron", "mas_antiguo_que_dias", "mayor_que_m
 # Ej.: en «renombrar», «origen» es la carpeta por defecto cuando la CLI no pasa ninguna.
 CAMPOS_OPCIONALES_POR_TIPO: dict[str, tuple[str, ...]] = {
     "renombrar": ("origen",),
+    # En las acciones IA, origen/destino son opcionales (destino cae a «junto
+    # al fichero») y el tope de caracteres tiene valor por defecto.
+    "resumir": ("origen", "destino", "max_caracteres", "categorias"),
 }
 
 # nombre en kebab-case: minúsculas, números, guiones, tildes y espacios. Ej.: abrir-nav
@@ -143,6 +160,50 @@ def validar_acciones(acciones: list[dict[str, Any]]) -> tuple[list[str], list[st
     return errores, avisos
 
 
+def validar_ia(accion: dict[str, Any]) -> list[str]:
+    """Valida los campos de las acciones con IA (TIPOS_IA). Devuelve avisos.
+
+    «instrucciones» es obligatoria (texto no vacío); «max_caracteres» es
+    un entero entre MAX_CARACTERES_MIN y MAX_CARACTERES_MAX (si no está,
+    vale MAX_CARACTERES_DEFECTO) y «categorias», si está, una lista no
+    vacía de textos no vacíos.
+    """
+    instrucciones = accion.get("instrucciones")
+    if not isinstance(instrucciones, str) or not instrucciones.strip():
+        raise AccionNoValida(
+            accion,
+            "instrucciones",
+            "falta «instrucciones» (lo que le pedimos al modelo, texto no vacío).",
+        )
+
+    if "max_caracteres" in accion:
+        tope = accion["max_caracteres"]
+        if (
+            isinstance(tope, bool)
+            or not isinstance(tope, int)
+            or not (MAX_CARACTERES_MIN <= tope <= MAX_CARACTERES_MAX)
+        ):
+            raise AccionNoValida(
+                accion,
+                "max_caracteres",
+                f"debe ser un entero entre {MAX_CARACTERES_MIN} y "
+                f"{MAX_CARACTERES_MAX} (encontrado: {tope!r}).",
+            )
+
+    if "categorias" in accion:
+        categorias = accion["categorias"]
+        if not isinstance(categorias, list) or not categorias or not all(
+            isinstance(c, str) and c.strip() for c in categorias
+        ):
+            raise AccionNoValida(
+                accion,
+                "categorias",
+                "debe ser una lista no vacía de nombres de carpeta (textos no vacíos).",
+            )
+
+    return []
+
+
 def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
     """Valida una acción. Devuelve los avisos.
 
@@ -235,6 +296,10 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
                 "copia_seguridad",
                 "falta la ruta del .reg de copia de seguridad (texto no vacío).",
             )
+
+    # Acciones con IA: instrucciones, max_caracteres y categorias
+    if tipo in TIPOS_IA:
+        avisos.extend(validar_ia(accion))
 
     # filtro, si está, tiene forma de comprobar
     if "filtro" in accion:

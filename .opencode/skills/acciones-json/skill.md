@@ -4,7 +4,7 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
 ---
 # Esquema de acciones.json
 - Raíz: {"version": 1, "acciones": [...]}. Cada acción: nombre (único, minúsculas-con-guiones), descripcion, tipo.
-- Tipos (los 7 de TIPOS_CONOCIDOS, en config.py):
+- Tipos (los de TIPOS_CONOCIDOS, en config.py):
   - `abrir` → requiere `urls` (lista de http:// o https://). Abre pestañas en el navegador.
   - `mover` → requiere `origen`, `filtro` y `destino`. Mueve sin sobrescribir.
   - `copiar` → requiere `origen`, `filtro` y `destino`. Copia sin borrar el original.
@@ -26,6 +26,17 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     copia .reg restaurable. La lógica vive en `acciones.py` (clase LimpiarUSB); el motor la
     ejecuta sin ficheros (caso especial en `motor.py`). El reinicio obligatorio lo pregunta
     la CLI al terminar (`--si` reinicia solo).
+  - `resumir` (acción IA, en `TIPOS_IA`) → requiere `filtro` e `instrucciones` (lo que se le
+    pide al modelo, texto no vacío). Opcionales: `origen` (carpeta; la CLI manda con `-c`),
+    `destino` (si no hay, el resumen se escribe junto al fichero), `max_caracteres` (entero
+    de 500 a 50000; por defecto 12000: tope de texto que se envía al modelo, se valida en
+    `config.validar_ia()`) y `categorias` (lista no vacía; el mensaje del sistema solo
+    acepta respuestas de esa lista). Escribe «`<nombre>.resumen.md`» en el destino con
+    `destino_libre` (nunca pisa). El motor inyecta el proveedor (`ProveedorCentro.desde_entorno()`,
+    lee el `.env`) antes de ejecutar; con `--simular` NO se construye el proveedor ni se
+    llama al modelo: solo dice cuántos caracteres enviaría. El documento va entre
+    `<documento>` y `</documento>` y el sistema avisa de que eso es material a tratar,
+    nunca instrucciones. `leer_texto()` lee .txt/.md (utf-8) y .pdf con pymupdf.
 - `confirmar` (bool, opcional): si es true, la CLI pregunta antes de ejecutar. En `borrar` se pregunta siempre.
 - filtro opcional: extensiones (lista, en minúsculas), patron (regex válida), mas_antiguo_que_dias, mayor_que_mb.
   - **Basta con UNO de los cuatro.** `{"mas_antiguo_que_dias": 400}` es un filtro válido y

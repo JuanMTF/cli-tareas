@@ -143,8 +143,13 @@ def test_ejecutar_nombre_parecido_lo_sugiere() -> None:
     assert resultado.exit_code == 1
     texto = _texto(resultado)
     assert "¿Quisiste decir" in texto
-    # alguna de las dos acciones reales que se le parecen
-    assert "limpiar-temporales" in texto or "borrar-descargas" in texto
+    # alguna de las acciones reales que se le parecen (con la capa IA entró
+    # «clasificar-descargas», que difflib considera aún más parecida)
+    assert (
+        "limpiar-temporales" in texto
+        or "borrar-descargas" in texto
+        or "clasificar-descargas" in texto
+    )
 
 
 def test_acciones_nombre_parecido_lo_sugiere() -> None:

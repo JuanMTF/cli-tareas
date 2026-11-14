@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from tareas.acciones import Accion, NAVEGADORES, Resultado
 from tareas.errores import TareasError
+from tareas.ia import ProveedorCentro
 
 
 class Motor:
@@ -91,6 +92,13 @@ class Motor:
         self.acciones[nombre] = accion
 
         tipo = accion.config.get("tipo")
+
+        # Las acciones con IA necesitan proveedor: se construye aquí (lee el
+        # .env; si falta config o red, IANoDisponible sale con código 4) y se
+        # inyecta en la acción. Con --simular NO se construye ni se llama al
+        # modelo: la acción solo cuenta los caracteres que enviaría.
+        if getattr(accion, "necesita_ia", False) and not simular:
+            accion.proveedor = ProveedorCentro.desde_entorno()
 
         if nombre_zip:
             if tipo not in ("comprimir", "renombrar"):

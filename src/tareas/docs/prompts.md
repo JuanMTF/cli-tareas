@@ -498,5 +498,219 @@ funciona a la primera
 
 **Qué aprendí:**  estamos configurando el mcp y opnecode para que trabaje de forma eficiente y segura
 
+## 14-11-2026 Puesta a punto de comprobar-ia desde casa:
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt (terminal + pregunta):**
+PS C:\manuales> cliwork comprobar-ia
+Error: Faltan CENTRO_IA_URL o CENTRO_IA_KEY: ponlas en .env (mira .env.example)
+¿por qué sale esto si no he tocado nada?
+
+**Qué corregí del plan:** 
+yo estaba en C:\manuales y el .env no existía: hay que crearlo copiando .env.example
+(copy .env.example .env) y ejecutar desde la carpeta del proyecto.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno, solo configuración, no se tocó código.
+
+**Funcionaba a la primera:** 
+no: primero edité .env.example creyendo que era el .env y seguía el mismo error.
+
+**Qué aprendí:**  el .env se busca desde el directorio actual y solo se lee el
+fichero que se llama .env; .env.example es la plantilla y hay que copiarla.
+
+### Prompt 2
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+Como no se puede conectar al centro si no estamos en su red, ¿podemos conectar
+con otra IA como tú? Si me das los datos los pongo y cuando vaya al centro
+pongo las del centro.
+
+**Qué corregí del plan:** 
+los nombres de las variables en .env tienen que ser CENTRO_IA_URL,
+CENTRO_IA_KEY y CENTRO_IA_MODELO (yo las había llamado CASA_IA_...).
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno: ProveedorCentro ya es genérico (API de OpenAI), no hace falta
+cambiar el código.
+
+**Funcionaba a la primera:** 
+casi: conectó pero devolvía 400.
+
+**Qué aprendí:**  el prefijo CENTRO_IA_ es solo el nombre de la variable, no
+obliga a usar el servidor del centro; en casa apunta a https://api.z.ai/api/paas/v4
+con CENTRO_IA_MODELO=glm-4.7-flash (gratis) y la clave personal de z.ai.
+La que vale es la API Key (sk-...), no el API Key ID.
+
+### Prompt 3
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt (salida de comprobar-ia):**
+Modelo: glm-4.7-flash lo he puesto como me has dicho asi pero aun me sale qu no
+conecgta con el servidor del centro...
+Error: El servidor de IA responde 400: algo ha fallado
+
+**Qué corregí del plan:** 
+al pegar el mensaje del chat dentro del .env se me coló el texto en la línea
+CENTRO_IA_MODELO=; el programa mandaba todo eso como nombre del modelo.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno: dejar la línea limpia (CENTRO_IA_MODELO=glm-4.7-flash) y los
+comentarios en su propia línea con #.
+
+**Funcionaba a la primera:** 
+no, a la segunda: la primera vez no guardé el fichero.
+
+**Qué aprendí:**  leer la salida de la CLI despacio: ahí estaba el modelo
+sucio que causaba el 400; y la clave no se pega nunca en el chat.
+
+### Prompt 4
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+TE paso este codigo de referencia revisalo y indica si hay algun problema
+para decidir que hacer (el ia.py y errores.py de edu, con la tabla de
+códigos de salida 0-4).
+
+**Qué corregí del plan:** 
+no hizo falta cambiar nada: el repo ya implementa la referencia y con más
+blindaje (mira la causa de la excepción en el error de certificado, traduce
+el JSON raro, captura InvalidURL y HTTPError genérico, y avisa si falta el .crt).
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno: el código del repo cumple la referencia del profesor, solo había
+que arreglar el .env.
+
+**Funcionaba a la primera:** 
+el mensaje del 400 («algo ha fallado») es el previsto por la referencia:
+era fallo de configuración, no de código.
+
+**Qué aprendí:**  la referencia de edu sirve para auditar lo que hace el
+agente; el repo la cumple y la supera, y los códigos de salida 0-4 están
+respetados (IANoDisponible sale con 4).
+
+## 14-11-2026 (tarde) La capa IA de acciones y los servidores gratuitos:
+### Prompt 1
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+Carga la skill acciones-json. Añade el tipo de acción «resumir»:
+config.py (TIPOS_IA y validar_ia), acciones.py (leer_texto con pypdf,
+AccionIA y Resumir), --simular NO llama al modelo y el documento va entre
+<documento> y </documento. No toques cli.py. Y tambien las tres acciones
+que propusiste, y --config para cambiar carpetas sin tocar codigo, y las
+pruebas al ejecutar.bat.
+
+**Qué corregí del plan:** 
+pypdf no: la skill manda pymupdf (la misma dependencia que usa «transformar»),
+asi que leer_texto usa pymupdf y no se añade ninguna dependencia nueva.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno; el unico test que se toco fue el de difflib, porque al entrar
+«clasificar-descargas» ahora es la sugerencia mas parecida a
+«limpiar-descargas» (el test acepta las tres).
+
+**Funcionaba a la primera:** 
+la logica si (97 tests verdes); el .bat falló por los saltos de linea
+(LF en vez de CRLF) y por un set /p que dejaba un espacio.
+
+**Qué aprendí:**  un solo tipo IA generico con «instrucciones» en el JSON:
+añadir una acción IA = editar el JSON (ADR-0003); los .bat en Windows
+necesitan CRLF.
+
+### Prompt 2
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt (salida de la bateria):**
+FALLO resumir real → Error: El servidor de IA responde 429: demasiadas
+peticiones, espera un minuto. ¿Se puede hacer una cola de peticiones que
+vaya 1 a 1, o buscamos otro servidor?
+
+**Qué corregí del plan:** 
+la cola 1 a 1 ya existia (la CLI manda una peticion cada vez); lo que
+faltaba era paciencia: reintentar ante 429 (3 intentos, 60 s de espera)
+y subir la lectura de 60 a 120 s (el segundo fallo fue de tiempo).
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno: ia.py reintenta solo y el tiempo de espera no cuenta en el
+resumen de tokens/segundos.
+
+**Funcionaba a la primera:** 
+si: comprobar-ia salio en verde con glm-4.7-flash en 1 s.
+
+**Qué aprendí:**  el 429 no es un fallo nuestro: es la cola del proveedor
+gratuito compartido. Reintentar con espera es la «cola» (ADR-0004).
+
+### Prompt 3
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt (comprobar-ia con Gemini):**
+Servidor: https://generativelanguage.googleapis.com/v1beta/models/
+gemini-flash-latest:generateContent ... Error 404: no existe el modelo
+o la ruta. ¿Como lo configuro?
+
+**Qué corregí del plan:** 
+dos errores mios: pegue la pagina de un modelo en CENTRO_IA_URL (la URL
+es solo la raiz del servidor: .../v1beta/openai) y use gemini-2.5-flash-lite
+que esta en desuso (gemini-3.5-flash-lite es el de ahora).
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno: cambiar el .env es la gracia del ADR-0002 (cambiar de servidor
+sin tocar codigo).
+
+**Funcionaba a la primera:** 
+no; con la URL y el modelo correctos toca esperar la prueba real.
+
+**Qué aprendí:**  CENTRO_IA_URL = raiz del servidor (base URL), nunca la
+pagina de un modelo; los nombres de modelos caducan y hay que mirar la
+lista actual (se puede listar con la clave propia).
+
+### Prompt 4
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt (bateria en modo interactivo):**
+«Se encontraron 1 errores: Acción «mala-ia», campo «max_caracteres»:
+debe ser un entero entre 500 y 50000 (encontrado: 100). da este error»
+
+**Qué corregí del plan:** 
+nada: ese error ES la prueba (el JSON de prueba lleva max_caracteres: 100
+a proposito); se responde «s» en el modo interactivo. Lo aclaré en la
+bateria con una nota gris antes de las dos pruebas de error previsto.
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno.
+
+**Funcionaba a la primera:** 
+si, desde el principio; solo faltaba que la bateria avisara de que el
+rojo es el resultado esperado.
+
+**Qué aprendí:**  cuando una prueba comprueba un error, el rojo en
+pantalla es el resultado bueno; la bateria ahora lo dice antes de enseñarlo.
+
+### Prompt 5
+**Herramienta:** GLM-5-3-Flash
+
+**Prompt del plan (agente Build):**
+TE paso el codigo del profesor para revisar (semana 3: Resumir con tipo,
+validar_ia, y TIPOS_IA = resumir, renombrar-ia, clasificar).
+
+**Qué corregí del plan:** 
+el repo ya cumplia casi todo y con mas blindaje; lo unico adoptado de la
+referencia es la cabecera «# Resumen de <nombre>» en el .md. La
+validacion del repo es mas estricta: exige instrucciones (la del
+profesor deja pasar una accion IA sin ellas).
+
+**Diffs que rechacé o deshice (/undo) y por qué:** 
+ninguno mas: presupuesto() y el <documento> anti-instrucciones del repo
+son equivalentes o mejores que lo que se ve en el recorte.
+
+**Funcionaba a la primera:** 
+si: 97 tests verdes tras la cabecera.
+
+**Qué aprendí:**  la referencia de la semana 3 adelanta que «renombrar-ia»
+y «clasificar» seran tipos propios (subclases de AccionIA): el ADR-0003
+lo deja previsto, y «clasificar-descargas» cambiara de tipo cuando toque.
 
 

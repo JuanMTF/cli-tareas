@@ -46,13 +46,13 @@ Al terminar cada paso, escribe la fecha entre paréntesis.
 
 ### paso-4 (primera acción con IA: resumir, con pypdf)
 
-- [ ] `uv add pypdf`; `leer_texto(fichero, tope)` para .txt, .md y .pdf.
-- [ ] `AccionIA(Accion)` con `necesita_ia`, `proveedor`, `presupuesto()`, `preguntar()`.
-- [ ] `SISTEMA_RESUMIR` / `SISTEMA_NOMBRE`: el documento va entre `<documento>` y `</documento>`, nunca instrucciones.
-- [ ] `config.py`: TIPOS_IA y `validar_ia()` (instrucciones, max_caracteres 500-50000, categorías).
-- [ ] Acción propia en `acciones.json` (TUS carpetas e instrucciones).
-- [ ] `--simular` NO llama al modelo: solo dice cuántos caracteres enviaría.
-- [ ] Probar de verdad: la tabla con «tokens+tokens · segundos».
+- [X] `uv add pypdf`; `leer_texto(fichero, tope)` para .txt, .md y .pdf.
+- [X] `AccionIA(Accion)` con `necesita_ia`, `proveedor`, `presupuesto()`, `preguntar()`.
+- [X] `SISTEMA_RESUMIR` / `SISTEMA_NOMBRE`: el documento va entre `<documento>` y `</documento>`, nunca instrucciones.
+- [x] `config.py`: TIPOS_IA y `validar_ia()` (instrucciones, max_caracteres 500-50000, categorías).
+- [x] Acción propia en `acciones.json` (TUS carpetas e instrucciones).
+- [x] `--simular` NO llama al modelo: solo dice cuántos caracteres enviaría.
+- [x] Probar de verdad: la tabla con «tokens+tokens · segundos».
 
 ### paso-5 (renombrar-ia y clasificar: limpiar la respuesta)
 

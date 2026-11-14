@@ -7,7 +7,9 @@
 #      (uno con fecha antigua para probar los filtros por dias).
 #   4. Ejecuta acciones sobre el sandbox: mover (simulado y real, dos veces),
 #      copiar, comprimir y borrar. usb-del y transformar-pdf-html solo
-#      simulados (no tocan el registro ni convierten nada).
+#      simulados (no tocan el registro ni convierten nada). La accion IA
+#      resumir-apuntes: simulada SIEMPRE (cuenta caracteres, no llama al
+#      modelo) y real SOLO si hay .env con la configuracion del proveedor.
 #   5. Cuenta OK/FALLO y sale con codigo 1 si algo fallo (util para CI).
 #
 # Solo toca ~/pruebas-tareas. Nunca borra nada fuera del sandbox.
@@ -110,8 +112,10 @@ Paso "la ayuda lista los 6 comandos" (
 )
 
 # JSON roto: tiene que saltar con codigo 3 y sin traceback
+#     (el error rojo que sale a continuacion ES lo esperado: es la prueba)
 $rupta = Join-Path $env:TEMP "tareas-prueba-roto.json"
 '{"version": 1, "acciones": [' | Set-Content -Path $rupta -Encoding UTF8
+Write-Host "       (prueba prevista: el error rojo del JSON roto DEBE salir; responde 's')" -ForegroundColor DarkGray
 $roto = Tareas @("validar", $rupta)
 Paso "validar con JSON roto sale con codigo 3" ($roto.Codigo -eq 3) ("codigo = {0}" -f $roto.Codigo)
 Paso "el error no ensena traceback" (-not ($roto.Texto -match "Traceback"))
@@ -179,6 +183,30 @@ $tr = Tareas @("ejecutar", "transformar-pdf-html", $origen, "--simular")
 $destinoSim = Join-Path (Join-Path $HOME "Descargas\HTMLtransformados") "bateria-simular"
 Paso "transformar --simular anuncia SIMULACION con su PDF" (($tr.Codigo -eq 0) -and ($tr.Texto -match "SIMULACI.N") -and ($tr.Texto -match "bateria-simular"))
 Paso "transformar --simular NO convierte nada" (-not (Test-Path $destinoSim))
+
+# 4.1quater resumir --simular (accion IA): cuenta los caracteres que enviaria
+#     y NO llama al modelo ni escribe ningun resumen. Para contar de verdad
+#     hace falta un PDF real (el de crear_pdf_prueba.py, con pymupdf) y un
+#     .txt; todo dentro del sandbox.
+$origenIA = Join-Path $sb "origen-ia"
+$destinoIA = Join-Path $sb "resumenes-ia"
+New-Item -ItemType Directory -Force -Path $origenIA | Out-Null
+& uv run python "pruebas\crear_pdf_prueba.py" (Join-Path $origenIA "manual-ia.pdf") | Out-Null
+Set-Content -Path (Join-Path $origenIA "nota-ia.txt") -Value "texto para resumir de la bateria" -Encoding UTF8
+$iaSim = Tareas @("ejecutar", "resumir-apuntes", $origenIA, "-d", $destinoIA, "--simular")
+Paso "resumir --simular anuncia SIMULACION con caracteres a enviar" (($iaSim.Codigo -eq 0) -and ($iaSim.Texto -match "SIMULACI.N") -and ($iaSim.Texto -match "caracteres"))
+Paso "resumir --simular resume el PDF y el .txt (2 ficheros)" ($iaSim.Texto -match "manual-ia") -and ($iaSim.Texto -match "nota-ia")
+Paso "resumir --simular NO escribe ningun resumen ni pide .env" ((Get-ChildItem $destinoIA -ErrorAction SilentlyContinue).Count -eq 0)
+
+# Validacion de acciones IA mal escritas: max_caracteres fuera de rango
+#     (el rango es 500..50000) tiene que saltar con codigo 3 y sin traceback.
+#     OJO: el error rojo que sale a continuacion ES lo esperado (es la prueba).
+$iaMala = Join-Path $env:TEMP "tareas-prueba-ia-mala.json"
+Set-Content -Path $iaMala -Encoding UTF8 -Value '{"version": 1, "acciones": [{"nombre": "mala-ia", "descripcion": "prueba de validacion", "tipo": "resumir", "filtro": {"extensiones": [".txt"]}, "instrucciones": "resume", "max_caracteres": 100}]}'
+Write-Host "       (prueba prevista: el error rojo de max_caracteres DEBE salir; responde 's')" -ForegroundColor DarkGray
+$iaMalaR = Tareas @("validar", $iaMala)
+Paso "validar rechaza max_caracteres fuera de rango (codigo 3)" ($iaMalaR.Codigo -eq 3)
+Paso "el error de max_caracteres no ensena traceback" (-not ($iaMalaR.Texto -match "Traceback"))
 
 if ($SoloSimular) {
     Write-Host ""
@@ -300,6 +328,29 @@ if ($SoloSimular) {
         (Test-Path $registro) -and
         ((Get-Content $registro -Raw) -match "manual-bateria")
     )
+
+    # 4.10 resumir-apuntes REAL: solo si hay .env (config de IA del .env).
+    #     Convierte el manual-ia.pdf del sandbox en un <nombre>.resumen.md en
+    #     el sandbox y comprueba que el mensaje informa de tokens y segundos.
+    #     Con el modelo gratuito el servidor a veces responde 429 (demasiadas
+    #     peticiones): se espera un minuto y se reintenta una vez.
+    if (Test-Path ".env") {
+        $intentos = 0
+        do {
+            $intentos++
+            $iaReal = Tareas @("ejecutar", "resumir-apuntes", $origenIA, "-d", $destinoIA, "--si")
+            if (($iaReal.Texto -match "429") -and ($intentos -lt 2)) {
+                Write-Host "       429: demasiadas peticiones; esperando 60 s y reintentando..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 60
+            }
+        } while (($iaReal.Texto -match "429") -and ($intentos -lt 2))
+        $resumen = Join-Path $destinoIA "manual-ia.resumen.md"
+        Paso "resumir real termina con codigo 0" ($iaReal.Codigo -eq 0) $iaReal.Texto
+        Paso "resumir real crea el resumen .md del PDF" ((Test-Path $resumen) -and ((Get-Item $resumen).Length -gt 0))
+        Paso "resumir real informa de tokens y segundos" ($iaReal.Texto -match "tokens")
+    } else {
+        Write-Host "  (sin .env: se salta la prueba REAL de resumir-apuntes)" -ForegroundColor DarkGray
+    }
 }
 
 # --- 5. Resumen -------------------------------------------------------------

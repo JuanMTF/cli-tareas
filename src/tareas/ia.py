@@ -33,7 +33,16 @@ MODELO_POR_DEFECTO = "centro/qwen3.8-flash-next"
 
 # httpx agota por defecto todo a 5 s: para un modelo que está generando
 # texto hace falta margen al leer (del profesor: Timeout(60, connect=5)).
-TIEMPO_ESPERA = httpx.Timeout(60, connect=5)
+# Los modelos gratuitos van a veces cargados y tardan más de un minuto en
+# contestar: la lectura admite 120 s (la conexión sigue a 5).
+TIEMPO_ESPERA = httpx.Timeout(120, connect=5)
+
+# Con los modelos gratuitos el servidor a veces responde 429 (demasiadas
+# peticiones: su cola está saturada). Como la CLI manda las peticiones de
+# una en una, lo que satura no somos nosotros: se espera un minuto y se
+# reintenta antes de rendirse y avisar.
+ESPERA_429 = 60  # segundos entre reintento y reintento
+INTENTOS_429 = 3  # intentos totales (el normal + 2 con espera)
 
 # Pregunta mínima de «comprobar-ia»: el sistema pide contestación de 1 palabra
 # y max_tokens=5 acota el gasto del centro.
@@ -109,49 +118,63 @@ class ProveedorCentro(ProveedorIA):
             "temperature": 0.2,
             "max_tokens": max_tokens,
         }
-        inicio = time.perf_counter()
-        try:
-            respuesta_http = httpx.post(
-                f"{self.url}/chat/completions",
-                json=cuerpo,
-                headers={"Authorization": f"Bearer {self._clave}"},
-                timeout=TIEMPO_ESPERA,
-                verify=self._tls,
-            )
-        except httpx.InvalidURL as exc:
-            raise IANoDisponible(
-                f"La dirección del servidor no es válida "
-                f"({VAR_URL}: {self.url}): debe empezar por http:// o https://"
-            ) from exc
-        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            # El fallo de certificado llega DENTRO de ConnectError: se mira
-            # la causa real (ssl.SSLCertVerificationError) por si es eso.
-            cadena = " | ".join(str(nivel) for nivel in (exc, exc.__cause__) if nivel)
-            if "CERTIFICATE" in cadena.upper():
+        intento = 0
+        while True:
+            intento += 1
+            # El reloj de la Respuesta arranca en cada intento: el tiempo de
+            # espera del 429 no es tiempo del modelo.
+            inicio = time.perf_counter()
+            try:
+                respuesta_http = httpx.post(
+                    f"{self.url}/chat/completions",
+                    json=cuerpo,
+                    headers={"Authorization": f"Bearer {self._clave}"},
+                    timeout=TIEMPO_ESPERA,
+                    verify=self._tls,
+                )
+            except httpx.InvalidURL as exc:
                 raise IANoDisponible(
-                    "El certificado del servidor no lo valida tu CA: revisa "
-                    f"{VAR_CA} en .env (¿es el .crt correcto y vigente?)"
+                    f"La dirección del servidor no es válida "
+                    f"({VAR_URL}: {self.url}): debe empezar por http:// o https://"
                 ) from exc
-            raise IANoDisponible(
-                f"No llego al servidor de IA ({self.url}): ¿estás en la red del centro?"
-            ) from exc
-        except httpx.TimeoutException as exc:
-            raise IANoDisponible("El servidor de IA no ha respondido a tiempo") from exc
-        except httpx.UnsupportedProtocol as exc:
-            raise IANoDisponible(
-                f"El servidor no usa un protocolo válido: revisa {VAR_URL}"
-            ) from exc
-        except httpx.HTTPError as exc:  # ReadError, WriteError, ProxyError...
-            raise IANoDisponible(
-                f"Se cortó la conexión con el servidor de IA: {exc}"
-            ) from exc
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                # El fallo de certificado llega DENTRO de ConnectError: se mira
+                # la causa real (ssl.SSLCertVerificationError) por si es eso.
+                cadena = " | ".join(str(nivel) for nivel in (exc, exc.__cause__) if nivel)
+                if "CERTIFICATE" in cadena.upper():
+                    raise IANoDisponible(
+                        "El certificado del servidor no lo valida tu CA: revisa "
+                        f"{VAR_CA} en .env (¿es el .crt correcto y vigente?)"
+                    ) from exc
+                raise IANoDisponible(
+                    f"No llego al servidor de IA ({self.url}): ¿estás en la red del centro?"
+                ) from exc
+            except httpx.TimeoutException as exc:
+                raise IANoDisponible("El servidor de IA no ha respondido a tiempo") from exc
+            except httpx.UnsupportedProtocol as exc:
+                raise IANoDisponible(
+                    f"El servidor no usa un protocolo válido: revisa {VAR_URL}"
+                ) from exc
+            except httpx.HTTPError as exc:  # ReadError, WriteError, ProxyError...
+                raise IANoDisponible(
+                    f"Se cortó la conexión con el servidor de IA: {exc}"
+                ) from exc
 
-        try:
-            respuesta_http.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise IANoDisponible(
-                self._mensaje_estado(respuesta_http.status_code)
-            ) from exc
+            try:
+                respuesta_http.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                # 429: demasiadas peticiones. Se espera un minuto y se
+                # reintenta (INTENTOS_429 veces en total) antes de avisar.
+                if (
+                    respuesta_http.status_code == 429
+                    and intento < INTENTOS_429
+                ):
+                    time.sleep(ESPERA_429)
+                    continue
+                raise IANoDisponible(
+                    self._mensaje_estado(respuesta_http.status_code)
+                ) from exc
+            break
 
         texto, uso = self._leer_json(respuesta_http)
         return Respuesta(
