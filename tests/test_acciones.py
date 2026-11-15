@@ -9,6 +9,7 @@ import pytest
 
 from tareas.acciones import (
     ErrorConfiguracion,
+    RUTA_ACCIONES,
     cargar_acciones,
     validar_acciones,
 )
@@ -144,6 +145,23 @@ def test_fichero_real_del_proyecto_es_valido() -> None:
     nombres = [accion["nombre"] for accion in acciones]
     assert "abrir-nav" in nombres
     assert "comprimir-antiguos" in nombres
+
+
+def test_toda_accion_con_ficheros_lleva_origen() -> None:
+    """Para el menú: las acciones sobre ficheros del JSON real traen «origen».
+
+    («abrir» va con URLs, «limpiar-usb» con el registro y «estado-pc» lee el
+    equipo: no aplican.)
+    """
+    acciones = cargar_acciones(RUTA_ACCIONES)
+    for accion in acciones:
+        tipo = accion.get("tipo")
+        if tipo in ("abrir", "limpiar-usb", "estado-pc"):
+            continue
+        assert accion.get("origen"), (
+            f"La acción «{accion.get('nombre')}» ({tipo}) no tiene «origen»: "
+            "el menú no tendría carpeta por defecto."
+        )
 
 
 def test_comprimir_es_un_tipo_conocido() -> None:

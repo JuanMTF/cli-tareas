@@ -474,6 +474,7 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "httpx" },
+    { name = "psutil" },
     { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "typer" },
@@ -488,6 +489,7 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.5.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "psutil", specifier = ">=7.2.2" },
     { name = "pymupdf", specifier = ">=2.1" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "typer", specifier = ">=0.27.3" },

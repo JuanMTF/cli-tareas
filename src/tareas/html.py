@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from tareas import config as mod_config
 from tareas.errores import TareasError
 
 # Píxeles por punto del PDF (72 dpi): 2.0 = 144 dpi, nítido para manuales.
@@ -103,6 +104,29 @@ a { color: var(--acento); }
 .capa-texto span { position: absolute; white-space: pre; }
 .pie-manual { text-align: center; padding: 1.5rem 1rem; color: var(--apagado); font-size: .9rem; }
 @media (max-width: 40rem) { .pagina { margin: .75rem .25rem; } }
+
+/* --- Plantillas (la elegida va como clase en <body>: p-tecnico, ...) ---
+   p-tecnico es la de por defecto y no lleva CSS extra. */
+/* p-esquema: para planos y datasheets: página a lo grande y clic = zoom. */
+.manual.p-esquema { background: #14161a; }
+.manual.p-esquema .cabecera { background: #1d2027; border-bottom-color: #2a2e37; }
+.manual.p-esquema .cabecera h1 { color: #eef1f6; }
+.manual.p-esquema .datos,
+.manual.p-esquema .volver,
+.manual.p-esquema .pie-manual { color: #9aa3b2; }
+.manual.p-esquema .paginas { background: #1d2027; border-bottom-color: #2a2e37; }
+.manual.p-esquema .paginas a { color: #cfd6e1; border-color: #2a2e37; }
+.manual.p-esquema .paginas a:hover { color: #7fb0ff; border-color: #7fb0ff; }
+.manual.p-esquema .pagina {
+  max-width: min(98vw, 110rem);
+  box-shadow: 0 .2rem 1rem rgba(0, 0, 0, .55);
+  cursor: zoom-in;
+}
+.manual.p-esquema .pagina.zoom { overflow: auto; cursor: zoom-out; }
+.manual.p-esquema .pagina.zoom img { width: 220%; }
+/* p-guia: lectura cómoda: página estrecha y centrada. */
+.manual.p-guia .pagina { max-width: 44rem; }
+.manual.p-guia .cabecera h1 { font-size: 1rem; }
 """
 
 SCRIPT = """/* Script compartido: galería (buscador) y manual (flechas de teclado). */
@@ -152,6 +176,14 @@ SCRIPT = """/* Script compartido: galería (buscador) y manual (flechas de tecla
       } else if (evento.key === "End") {
         irA(paginas.length - 1);
       }
+    });
+  }
+  // Plantilla «esquema»: clic en la página la acerca y otro clic la aleja.
+  if (document.body.classList.contains("p-esquema")) {
+    Array.prototype.slice.call(document.querySelectorAll(".pagina")).forEach(function (pagina) {
+      pagina.addEventListener("click", function () {
+        pagina.classList.toggle("zoom");
+      });
     });
   }
 })();
@@ -330,12 +362,21 @@ def _capa_texto(pagina: Any) -> str:
     return "".join(trozos)
 
 
-def convertir_pdf(pdf: Path, destino: Path) -> dict[str, Any]:
+def convertir_pdf(pdf: Path, destino: Path, plantilla: str | None = None) -> dict[str, Any]:
     """Convierte un PDF en su carpeta con index.html + páginas en imagen.
 
-    Devuelve el registro que va a manuales.json. Si la carpeta ya existía con
-    imágenes, se rehacen (esta función solo se llama para convertir de verdad).
+    ``plantilla`` es la del catálogo config.PLANTILLAS (tecnico/esquema/guia);
+    si no se dice, la de por defecto. Devuelve el registro que va a
+    manuales.json. Si la carpeta ya existía con imágenes, se rehacen (esta
+    función solo se llama para convertir de verdad).
     """
+    if not plantilla:  # None o «»: la de por defecto
+        plantilla = mod_config.PLANTILLA_DEFECTO
+    if plantilla not in mod_config.PLANTILLAS:
+        raise TareasError(
+            f"La plantilla «{plantilla}» no existe. "
+            f"Válidas: {', '.join(mod_config.PLANTILLAS)}."
+        )
     pymupdf = _pymupdf()
     carpeta = destino / pdf.stem
     carpeta.mkdir(parents=True, exist_ok=True)
@@ -371,6 +412,7 @@ def convertir_pdf(pdf: Path, destino: Path) -> dict[str, Any]:
         "carpeta": carpeta.name,
         "paginas": total_paginas,
         "tamano": st.st_size,
+        "plantilla": plantilla,
         "fecha_pdf": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
         "convertido": datetime.now().isoformat(timespec="seconds"),
     }
@@ -405,7 +447,7 @@ def _html_manual(registro: dict[str, Any], secciones: list[str]) -> str:
         f"  <title>{escapar(nombre)}</title>\n"
         f'  <link rel="stylesheet" href="../{NOMBRE_ESTILOS}">\n'
         "</head>\n"
-        '<body class="manual">\n'
+        f'<body class="manual p-{escapar(str(registro.get("plantilla") or "tecnico"))}">\n'
         '  <header class="cabecera">\n'
         f'    <a class="volver" href="../{NOMBRE_INDICE}">← Todos los manuales</a>\n'
         f"    <h1>{escapar(nombre)}</h1>\n"

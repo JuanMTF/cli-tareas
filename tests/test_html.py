@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from typer.testing import CliRunner
 
 from tareas import html as mod_html
@@ -318,3 +320,60 @@ def test_leer_manuales_sobre_json_roto_devuelve_vacio(tmp_path: Path) -> None:
     """Un manuales.json corrupto no rompe indexar: se trata como vacío."""
     (tmp_path / mod_html.NOMBRE_JSON).write_text("{roto", encoding="utf-8")
     assert mod_html.leer_manuales(tmp_path) == []
+
+
+# --- plantillas (el profesor: «según el tipo de archivo, una plantilla u otra») ---
+
+
+def test_plantilla_elegida_va_en_el_body_y_en_el_registro(tmp_path: Path) -> None:
+    """convertir_pdf con plantilla «esquema»: clase p-esquema y queda en el registro."""
+    pdf = _crear_pdf(tmp_path / "esquema-placa.pdf", paginas=1)
+
+    registro = mod_html.convertir_pdf(pdf, tmp_path, plantilla="esquema")
+
+    assert registro["plantilla"] == "esquema"
+    pagina = (tmp_path / "esquema-placa" / "index.html").read_text(encoding="utf-8")
+    assert 'class="manual p-esquema"' in pagina
+
+
+def test_sin_plantilla_usa_tecnico(tmp_path: Path) -> None:
+    """Sin plantilla (o con vacía), la de por defecto: p-tecnico en el body."""
+    pdf = _crear_pdf(tmp_path / "normal.pdf", paginas=1)
+
+    registro = mod_html.convertir_pdf(pdf, tmp_path, plantilla="")
+
+    assert registro["plantilla"] == "tecnico"
+    pagina = (tmp_path / "normal" / "index.html").read_text(encoding="utf-8")
+    assert 'class="manual p-tecnico"' in pagina
+
+
+def test_plantilla_inexistente_se_rechaza(tmp_path: Path) -> None:
+    """Una plantilla que no está en el catálogo no se convierte: error claro."""
+    from tareas.errores import TareasError
+
+    pdf = _crear_pdf(tmp_path / "raro.pdf", paginas=1)
+    with pytest.raises(TareasError) as exc:
+        mod_html.convertir_pdf(pdf, tmp_path, plantilla="revista")
+    assert "tecnico, esquema, guia" in str(exc.value)
+
+
+def test_validar_rechaza_plantilla_desconocida() -> None:
+    """El campo «plantilla» de transformar solo acepta las del catálogo."""
+    from tareas.config import validar
+    from tareas.errores import AccionNoValida
+
+    buena = {
+        "nombre": "transformar-x",
+        "descripcion": "prueba",
+        "tipo": "transformar",
+        "origen": "~/a",
+        "filtro": {"extensiones": [".pdf"]},
+        "destino": "~/b",
+        "plantilla": "guia",
+    }
+    assert validar(buena, 1, set()) == []
+
+    with pytest.raises(AccionNoValida) as exc:
+        validar({**buena, "plantilla": "loca"}, 1, set())
+    assert "plantilla" in str(exc.value)
+

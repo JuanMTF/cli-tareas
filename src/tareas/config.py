@@ -17,11 +17,12 @@ RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
 TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
-                   "comprimir", "copiar", "limpiar-usb", "resumir")
+                   "comprimir", "copiar", "limpiar-usb", "resumir",
+                   "renombrar-ia", "clasificar", "estado-pc")
 
 # Tipos que consultan al proveedor de IA (ProveedorCentro, en ia.py): el
 # motor les inyecta el proveedor y, con --simular, no se llama al modelo.
-TIPOS_IA = ("resumir",)
+TIPOS_IA = ("resumir", "renombrar-ia", "clasificar")
 
 # Límites del campo «max_caracteres» de las acciones IA (cuánto texto del
 # fichero se manda como máximo al modelo).
@@ -31,6 +32,15 @@ MAX_CARACTERES_DEFECTO = 12000
 
 # Campos que puede llevar cualquier acción.
 CAMPOS_COMUNES = ("nombre", "descripcion", "tipo", "confirmar")
+
+# Plantillas del tipo «transformar»: cómo se ve el HTML generado (la elegida
+# se marca como clase en <body> y el estilo vive en html.py).
+PLANTILLAS = ("tecnico", "esquema", "guia")
+PLANTILLA_DEFECTO = "tecnico"
+
+# Umbrales del campo «avisos» del tipo «estado-pc»: % a partir del cual el
+# informe saca un «AVISO: ...» (medido >= umbral).
+AVISOS_CONOCIDOS = ("cpu_pct", "memoria_pct", "disco_pct")
 
 # Campos obligatorios de cada tipo.
 CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
@@ -48,6 +58,16 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     # carpeta origen la pasa la CLI (o el JSON); sin destino, el resumen se
     # escribe junto al fichero.
     "resumir": ("filtro", "instrucciones"),
+    # Acción IA que renombra: el modelo propone el nombre (primera línea
+    # limpia con a_nombre_seguro) y el motor renombra NUNCA con la respuesta
+    # tal cual. Sin destino, renombra en su misma carpeta.
+    "renombrar-ia": ("filtro", "instrucciones"),
+    # Acción IA que clasifica: el modelo elige UNA categoría de la lista y
+    # el fichero se mueve a destino/categoría/ (nada de rutas del modelo).
+    "clasificar": ("filtro", "categorias", "destino"),
+    # Informe del equipo (CPU, memoria, discos, temperaturas...): solo lectura,
+    # sin carpeta ni ficheros (como «limpiar-usb», no lleva campos propios).
+    "estado-pc": (),
 }
 
 # Campos que se reconocen dentro de 'filtro'.
@@ -57,9 +77,20 @@ FILTRO_CONOCIDO = ("extensiones", "patron", "mas_antiguo_que_dias", "mayor_que_m
 # Ej.: en «renombrar», «origen» es la carpeta por defecto cuando la CLI no pasa ninguna.
 CAMPOS_OPCIONALES_POR_TIPO: dict[str, tuple[str, ...]] = {
     "renombrar": ("origen",),
+    # En «borrar», «origen» es la carpeta donde busca los .tmp (el motor la
+    # usa igual que en mover/copiar; el menú la propone por defecto).
+    "borrar": ("origen",),
     # En las acciones IA, origen/destino son opcionales (destino cae a «junto
     # al fichero») y el tope de caracteres tiene valor por defecto.
     "resumir": ("origen", "destino", "max_caracteres", "categorias"),
+    # En «renombrar-ia», sin destino se renombra en la propia carpeta del
+    # fichero; «clasificar» exige categorias y destino (no son opcionales).
+    "renombrar-ia": ("origen", "destino", "max_caracteres"),
+    "clasificar": ("origen", "max_caracteres", "instrucciones"),
+    # En «transformar», la plantilla del HTML (tecnico/esquema/guia).
+    "transformar": ("plantilla",),
+    # En «estado-pc», los umbrales de los avisos (disco/memoria/CPU en %).
+    "estado-pc": ("avisos",),
 }
 
 # nombre en kebab-case: minúsculas, números, guiones, tildes y espacios. Ej.: abrir-nav
@@ -163,13 +194,23 @@ def validar_acciones(acciones: list[dict[str, Any]]) -> tuple[list[str], list[st
 def validar_ia(accion: dict[str, Any]) -> list[str]:
     """Valida los campos de las acciones con IA (TIPOS_IA). Devuelve avisos.
 
-    «instrucciones» es obligatoria (texto no vacío); «max_caracteres» es
-    un entero entre MAX_CARACTERES_MIN y MAX_CARACTERES_MAX (si no está,
-    vale MAX_CARACTERES_DEFECTO) y «categorias», si está, una lista no
-    vacía de textos no vacíos.
+    «instrucciones» es obligatoria en «resumir» y «renombrar-ia» (texto no
+    vacío; en «clasificar» es opcional, porque el mensaje lo genera la
+    propia acción). «max_caracteres» es un entero entre MAX_CARACTERES_MIN
+    y MAX_CARACTERES_MAX (si no está, vale MAX_CARACTERES_DEFECTO) y
+    «categorias», si está, una lista no vacía de textos no vacíos.
     """
+    tipo = accion.get("tipo")
     instrucciones = accion.get("instrucciones")
-    if not isinstance(instrucciones, str) or not instrucciones.strip():
+    if instrucciones is not None and (
+        not isinstance(instrucciones, str) or not instrucciones.strip()
+    ):
+        raise AccionNoValida(
+            accion,
+            "instrucciones",
+            "si está, tiene que ser un texto no vacío.",
+        )
+    if tipo in ("resumir", "renombrar-ia") and instrucciones is None:
         raise AccionNoValida(
             accion,
             "instrucciones",
@@ -296,6 +337,46 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
                 "copia_seguridad",
                 "falta la ruta del .reg de copia de seguridad (texto no vacío).",
             )
+
+    # transformar: la plantilla del HTML, si viene, tiene que existir
+    if tipo == "transformar" and "plantilla" in accion:
+        plantilla = accion["plantilla"]
+        if not isinstance(plantilla, str) or plantilla not in PLANTILLAS:
+            raise AccionNoValida(
+                accion,
+                "plantilla",
+                f"debe ser una de: {', '.join(PLANTILLAS)} "
+                f"(encontrado: {plantilla!r}).",
+            )
+
+    # estado-pc: los umbrales de «avisos», si vienen, tienen que ser
+    # claves conocidas con un entero del 1 al 100 (bool no vale).
+    if tipo == "estado-pc" and "avisos" in accion:
+        umbrales = accion["avisos"]
+        if not isinstance(umbrales, dict):
+            raise AccionNoValida(
+                accion,
+                "avisos",
+                "debe ser un objeto con umbrales en % "
+                f"(claves: {', '.join(AVISOS_CONOCIDOS)}).",
+            )
+        for clave, valor in umbrales.items():
+            if clave not in AVISOS_CONOCIDOS:
+                raise AccionNoValida(
+                    accion,
+                    "avisos",
+                    f"clave «{clave}» desconocida; válidas: "
+                    f"{', '.join(AVISOS_CONOCIDOS)}.",
+                )
+            if isinstance(valor, bool) or not isinstance(valor, int) or not (
+                1 <= valor <= 100
+            ):
+                raise AccionNoValida(
+                    accion,
+                    "avisos",
+                    f"«{clave}» debe ser un entero del 1 al 100 "
+                    f"(encontrado: {valor!r}).",
+                )
 
     # Acciones con IA: instrucciones, max_caracteres y categorias
     if tipo in TIPOS_IA:

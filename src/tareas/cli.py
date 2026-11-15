@@ -35,7 +35,7 @@ from tareas.acciones import (
     cargar_acciones,
     validar_acciones,
 )
-from tareas.errores import ConfigError, TareasError
+from tareas.errores import ConfigError, IANoDisponible, TareasError
 from tareas.ia import SISTEMA_PRUEBA, ProveedorCentro
 from tareas.motor import Motor
 
@@ -53,6 +53,8 @@ app = typer.Typer(
     help="Automatiza tareas repetitivas con ficheros desde la terminal.",
     add_completion=True,
     no_args_is_help=True,
+    # Permite «cliWork --menu» sin ninguna orden detrás: el callback decide.
+    invoke_without_command=True,
 )
 
 
@@ -73,9 +75,29 @@ def principal(
             metavar="",
         ),
     ] = config.RUTA_ACCIONES,
+    menu_flag: Annotated[
+        bool,
+        typer.Option(
+            "--menu",
+            help=(
+                "Menú con números para lanzar las acciones sin teclear "
+                "órdenes. Se usa SOLO: cliWork --menu (o cliWork menu)."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Opciones globales de la CLI (se ponen justo después de «cliWork»)."""
     ctx.obj = {"ruta_config": config_ruta.expanduser()}
+    if menu_flag:
+        if ctx.invoked_subcommand is not None:
+            _error("La opción --menu se usa sola: «cliWork --menu» (o «cliWork menu»).")
+        _bucle_menu(ctx)
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        # «cliWork» a secas: la ayuda de siempre (no_args_is_help queda
+        # cubierto aquí porque con invoke_without_command el callback manda).
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
 
 
 def _error(mensaje: str, codigo: int = 1) -> NoReturn:
@@ -87,6 +109,19 @@ def _error(mensaje: str, codigo: int = 1) -> NoReturn:
 def _error_validacion(mensaje: str, codigo: int = 3) -> NoReturn:
     """Error de validación (ConfigError): igual que _error, con código 3 por defecto."""
     _error(mensaje, codigo)
+
+
+def _aviso_sin_ia(exc: TareasError) -> None:
+    """Antes de salir con 4 (IANoDisponible), avisa de que el resto sigue.
+
+    La guía de la sesión 3 lo pide: el fallo de la capa IA no es un fallo
+    del programa — las acciones que no necesitan IA siguen funcionando.
+    """
+    if isinstance(exc, IANoDisponible):
+        consola_err.print(
+            "[yellow]Aviso:[/yellow] las acciones sin IA siguen funcionando "
+            "(por ejemplo: listar, validar, estado-pc)."
+        )
 
 
 def _ruta_config(ctx: Any) -> Path:
@@ -124,6 +159,58 @@ def _mensaje_no_existe(nombre: str, lista: list[dict[str, Any]]) -> str:
     if sugerencias:
         return f"No existe la acción: {nombre}. ¿Quisiste decir «{sugerencias[0]}»?"
     return f"No existe la acción: {nombre}"
+
+
+def _pedir_numero(
+    texto: str,
+    maximo: int,
+    defecto: int | None = None,
+    vacio_termina: bool = False,
+) -> int | None:
+    """Pide un número del 1 al maximo; 0 o Intro vacía devuelve None.
+
+    Con «defecto», Intro vacío devuelve ese número (para «simular», que es
+    lo seguro). Con «vacio_termina», Intro vacío sin defecto también
+    cancela. Las respuestas raras («abc», 99...) se avisan y se repiden.
+    """
+    while True:
+        try:
+            entrada = typer.prompt(
+                texto,
+                default="" if defecto is None else str(defecto),
+                show_default=False,
+            ).strip()
+        except (typer.Abort, KeyboardInterrupt, EOFError):
+            return None  # Ctrl+C o fin de entrada: cancelar, no traceback
+        if entrada == "":
+            if defecto is not None:
+                return defecto
+            if vacio_termina:
+                return None
+            consola_err.print("[yellow]Aviso:[/yellow] escribe un número (0 para salir).")
+            continue
+        try:
+            numero = int(entrada)
+        except ValueError:
+            consola_err.print(f"[yellow]Aviso:[/yellow] «{entrada}» no es un número.")
+            continue
+        if numero == 0:
+            return None
+        if not 1 <= numero <= maximo:
+            consola_err.print(f"[yellow]Aviso:[/yellow] el número va del 1 al {maximo}.")
+            continue
+        return numero
+
+
+def _pedir_texto(texto: str, defecto: str = "") -> str | None:
+    """Pide un texto que puede ir vacío. Con «defecto», Intro lo devuelve.
+
+    None si se corta (Ctrl+C, EOF).
+    """
+    try:
+        return typer.prompt(texto, default=defecto, show_default=False).strip()
+    except (typer.Abort, KeyboardInterrupt, EOFError):
+        return None
 
 
 @app.command()
@@ -246,11 +333,14 @@ def acciones(
     tabla = Table(title=f"Acciones de {escape(str(ruta_config))}")
     tabla.add_column("Nombre", style="cyan")
     tabla.add_column("Tipo")
+    tabla.add_column("IA")
     tabla.add_column("Descripción")
     for accion in filas:
+        usa_ia = "sí" if str(accion.get("tipo", "")) in config.TIPOS_IA else "—"
         tabla.add_row(
             escape(str(accion.get("nombre", ""))),
             escape(str(accion.get("tipo", ""))),
+            usa_ia,
             escape(str(accion.get("descripcion", ""))),
         )
     consola.print(tabla)
@@ -696,6 +786,7 @@ def ejecutar(
                 nombre_zip=nombre_zip,
             )
         except TareasError as exc:
+            _aviso_sin_ia(exc)
             _error(str(exc), codigo=exc.codigo_salida)
         _mostrar_simulacion(nombre, resultados)
         _mostrar_resumen(resultados)
@@ -733,6 +824,7 @@ def ejecutar(
             nombre_zip=nombre_zip,
         )
     except TareasError as exc:
+        _aviso_sin_ia(exc)
         _error(str(exc), codigo=exc.codigo_salida)
 
     for resultado in resultados:
@@ -760,3 +852,109 @@ def ejecutar(
                 "en el registro otra vez. Ejecuta el reinicio a mano cuando "
                 "hayas guardado todo."
             )
+
+
+def _bucle_menu(ctx: typer.Context) -> None:
+    """El bucle del menú: tabla numerada, número, carpeta y a ejecutar.
+
+    Se ejecuta DE VERDAD sin preguntas de más (lo pidió el que usa la CLI):
+    las confirmaciones de «borrar» y de las acciones con «confirmar» siguen
+    saliendo, que esas protegen. Para simular o elegir navegador/carpeta por
+    opciones, se teclea la orden: cliWork ejecutar NOMBRE --simular.
+    """
+    ruta_config = _ruta_config(ctx)
+    try:
+        lista = config.cargar(ruta_config)
+    except TareasError as exc:
+        _error(str(exc), codigo=exc.codigo_salida)
+
+    errores, _ = validar_acciones(lista)
+    if errores:
+        _error(
+            f"El fichero de acciones tiene {len(errores)} error(es). "
+            f"Ejecuta «cliWork validar» para verlos.",
+            codigo=3,
+        )
+
+    filas = sorted(lista, key=lambda accion: str(accion.get("nombre", "")))
+    while True:
+        consola.print()
+        tabla = Table(title=f"Menú de acciones · {escape(str(ruta_config))}")
+        tabla.add_column("Nº", justify="right", style="cyan")
+        tabla.add_column("Acción", style="cyan")
+        tabla.add_column("Tipo")
+        tabla.add_column("Descripción")
+        for numero, accion in enumerate(filas, start=1):
+            tabla.add_row(
+                str(numero),
+                escape(str(accion.get("nombre", ""))),
+                escape(str(accion.get("tipo", ""))),
+                escape(str(accion.get("descripcion", ""))),
+            )
+        consola.print(tabla)
+        consola.print("[dim]0 = salir · para simular u otras opciones: cliWork ejecutar NOMBRE[/dim]")
+
+        numero = _pedir_numero(
+            "Número de acción (0 = salir)", len(filas), vacio_termina=True
+        )
+        if numero is None:
+            consola.print("[green]Fin del menú.[/green]")
+            return
+        accion = filas[numero - 1]
+        nombre = str(accion.get("nombre", ""))
+        tipo = str(accion.get("tipo", ""))
+
+        carpeta: str | None = None
+        if tipo not in ("abrir", "limpiar-usb", "estado-pc"):
+            # «abrir» va con URLs, «limpiar-usb» con el registro y
+            # «estado-pc» lee el equipo: ninguno usa carpeta de origen,
+            # así que no se pregunta.
+            origen_json = str(accion.get("origen") or "").strip()
+            # El defecto visible es la carpeta «origen» del JSON (expandida):
+            # Intro lanza la acción donde su autor la configuró. Sin origen
+            # en el JSON, no hay defecto: hay que escribir la carpeta.
+            defecto_carpeta = str(Path(origen_json).expanduser()) if origen_json else ""
+            texto_carpeta = (
+                f"Carpeta de origen (Intro = {defecto_carpeta})"
+                if defecto_carpeta
+                else "Carpeta de origen (el JSON no tiene: escríbela)"
+            )
+            respuesta = _pedir_texto(texto_carpeta, defecto=defecto_carpeta)
+            if respuesta is None:
+                return
+            carpeta = respuesta or None
+
+        try:
+            ejecutar(
+                ctx,
+                nombre=nombre,
+                entrada=None,
+                simular=False,
+                google=False,
+                firefox=False,
+                edge=False,
+                carpeta=carpeta,
+                si=False,
+                antiguedad=None,
+                destino=None,
+                nombre_zip=None,
+            )
+        except (typer.Exit, typer.Abort, KeyboardInterrupt, EOFError):
+            # La orden ya ha escrito su error (o el usuario ha cancelado con
+            # la N del confirm): el menú sigue vivo.
+            pass
+
+        if _pedir_texto("Intro para volver al menú") is None:
+            return
+
+
+@app.command(
+    epilog=(
+        "Lo lanzas igual con la opción global: cliWork --menu. Ejecuta la "
+        "acción elegida (con sus confirmaciones); para --simular, navegador "
+        "o carpetas distintas, teclea la orden: cliWork ejecutar NOMBRE ..."
+    )
+)
+def menu(ctx: typer.Context) -> None:
+    """Menú con números para lanzar las acciones sin teclear la orden."""
+    _bucle_menu(ctx)

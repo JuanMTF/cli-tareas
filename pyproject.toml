@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "click>=8.5.0",
     "httpx>=0.28.1",
+    "psutil>=7.2.2",
     "pymupdf>=2.1",
     "python-dotenv>=1.2.4",
     "typer>=0.27.3",    #tu version puede ser otra: la pone uv add

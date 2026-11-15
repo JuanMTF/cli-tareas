@@ -7,14 +7,14 @@ Al terminar cada paso, escribe la fecha entre paréntesis.
 
 ## Pasos
 
-- [ ] paso-1 (secretos: .env.example, .gitignore y git)
-- [ ] paso-2 (context7 por MCP: bloque mcp, apagado por defecto)
-- [ ] paso-3 (el proveedor: src/tareas/ia.py y orden comprobar-ia)
-- [ ] paso-4 (primera acción con IA: resumir, con pypdf)
-- [ ] paso-5 (renombrar-ia y clasificar: limpiar la respuesta)
-- [ ] paso-6 (modo sin red: IANoDisponible, sale con 4)
-- [ ] paso-7 (skill, README y ADR-0002)
-- [ ] paso-8 (audita, prueba y commitea)
+- [x] paso-1 (secretos: .env.example, .gitignore y git) (15-11-2026)
+- [x] paso-2 (context7 por MCP: bloque mcp, apagado por defecto) (15-11-2026)
+- [x] paso-3 (el proveedor: src/tareas/ia.py y orden comprobar-ia) (15-11-2026)
+- [x] paso-4 (primera acción con IA: resumir, con pypdf) (15-11-2026)
+- [x] paso-5 (renombrar-ia y clasificar: limpiar la respuesta) (15-11-2026)
+- [x] paso-6 (modo sin red: IANoDisponible, sale con 4) (15-11-2026)
+- [x] paso-7 (skill, README y ADR-0002) (15-11-2026)
+- [ ] paso-8 (audita, prueba y commitea) — quedan: PDF sin texto (decidir), commits y push
 
 ## Detalle de cada paso
 
@@ -39,7 +39,7 @@ Al terminar cada paso, escribe la fecha entre paréntesis.
 - [X] `uv add httpx python-dotenv`.
 - [X] `IANoDisponible(TareasError)` en `errores.py`, `codigo_salida = 4`.
 - [x] Certificado con `ssl.create_default_context` + `verify=contexto` (no `verify="ruta"`).
-- [ ] Cada fallo con mensaje humano: sin clave, sin red, sin certificado, 401, 429, timeout.
+- [x] Cada fallo con mensaje humano: sin clave, sin red, sin certificado, 401, 429, timeout. *(verificado leyendo ia.py: ConnectError → mensaje, certificado, timeout, y el mapa 401/403/429 de _texto_http)*
 - [x] La clave nunca se imprime ni se escribe en ningún fichero.
 - [x] Orden `tareas comprobar-ia`: servidor, modelo, «clave: definida» y pregunta mínima (max_tokens 5).
 - [x] Terminar con: `uv run tareas comprobar-ia`.

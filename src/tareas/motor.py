@@ -138,6 +138,10 @@ class Motor:
             # Trabaja con el registro de Windows: sin carpeta ni ficheros.
             return accion.ejecutar([], simular, urls, abrir, destino)
 
+        if tipo == "estado-pc":
+            # Informe del equipo: solo lectura, sin carpeta ni ficheros.
+            return accion.ejecutar([], simular, urls, abrir, destino)
+
         # Acciones sobre ficheros: mover, renombrar, borrar, transformar, comprimir.
         carpeta_ejecucion = (carpeta or Path(accion.config.get("origen") or ".")).expanduser()
         if not carpeta_ejecucion.is_dir():

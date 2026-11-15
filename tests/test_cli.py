@@ -789,3 +789,122 @@ def test_mensaje_vacio_explica_el_filtro(tmp_path: Path) -> None:
     texto = _texto(resultado)
     assert "No hay ficheros que cumplan el filtro" in texto
     assert "más antiguos que 30 días" in texto
+
+
+# --- menu --------------------------------------------------------------------
+
+
+def test_menu_aparece_en_la_ayuda() -> None:
+    resultado = runner.invoke(app, ["--help"])
+    assert "menu" in _texto(resultado)
+
+
+def test_menu_salir_con_cero() -> None:
+    """El 0 cierra el menú limpio, sin traceback."""
+    resultado = runner.invoke(app, ["menu"], input="0\n")
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "Menú de acciones" in texto
+    assert "Fin del menú" in texto
+
+
+def test_menu_respuestas_raras_avisan_y_siguen() -> None:
+    """Un número fuera de rango o texto no numérico se avisan y se repiden."""
+    resultado = runner.invoke(app, ["menu"], input="99\nabc\n0\n")
+    assert resultado.exit_code == 0
+    texto = _texto(resultado)
+    assert "el número va del 1 al" in texto
+    assert "no es un número" in texto
+
+
+def test_menu_ejecuta_de_verdad_y_confirma() -> None:
+    """El menú ejecuta sin preguntar modos: abrir-nav pide confirmación (n cancela)."""
+    resultado = runner.invoke(app, ["menu"], input="1\nn\n")
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "¿Abrir" in texto
+
+
+def test_menu_como_opcion_global() -> None:
+    """cliWork --menu sin ninguna orden detrás también abre el menú."""
+    resultado = runner.invoke(app, ["--menu"], input="0\n")
+    assert resultado.exit_code == 0
+    assert "Fin del menú" in _texto(resultado)
+
+
+def test_menu_no_se_combina_con_otra_orden() -> None:
+    resultado = runner.invoke(app, ["--menu", "validar"])
+    assert resultado.exit_code == 1
+    assert "--menu se usa sola" in _texto(resultado)
+
+
+def test_menu_propone_la_carpeta_del_json(tmp_path: Path) -> None:
+    """El defecto de carpeta es la «origen» del JSON: Intro y a correr."""
+    origen = tmp_path / "Origen"
+    origen.mkdir()
+    (origen / "viejo.txt").write_text("x", encoding="utf-8")
+    destino = tmp_path / "Destino"
+    config_ruta = tmp_path / "acciones.json"
+    config_ruta.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "mover-prueba",
+                        "descripcion": "mueve los .txt",
+                        "tipo": "mover",
+                        "origen": str(origen),
+                        "filtro": {"extensiones": [".txt"]},
+                        "destino": str(destino),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resultado = runner.invoke(
+        app, ["--config", str(config_ruta), "menu"], input="1\n\n"
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert str(origen) in texto  # el defecto se ve en el prompt
+    assert (destino / "viejo.txt").exists()
+    assert not (origen / "viejo.txt").exists()
+
+
+def test_acciones_tabla_lleva_columna_ia() -> None:
+    """`cliWork acciones`: columna «IA» (sí / —) como pide la semana 3."""
+    resultado = runner.invoke(app, ["acciones"])
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "IA" in texto
+    assert " sí " in texto  # renombrar-descriptivo / clasificar-descargas
+    assert " — " in texto  # las que no usan IA
+
+
+def test_menu_no_pregunta_carpeta_a_estado_pc(tmp_path: Path) -> None:
+    """«estado-pc» no usa carpeta: el menú no la pregunta (como abrir/limpiar-usb)."""
+    config_ruta = tmp_path / "acciones.json"
+    config_ruta.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "estado-pc-prueba",
+                        "descripcion": "informe del equipo",
+                        "tipo": "estado-pc",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resultado = runner.invoke(app, ["--config", str(config_ruta), "menu"], input="1\n")
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "Carpeta de origen" not in texto  # no se pregunta carpeta
+    assert "Estado del equipo" in texto  # y el informe se ejecuta (solo lectura)

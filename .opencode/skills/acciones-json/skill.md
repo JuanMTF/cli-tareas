@@ -12,10 +12,17 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     opcionalmente `origen` (carpeta por defecto cuando la CLI no pasa `-r`/`-c`; está en
     `CAMPOS_OPCIONALES_POR_TIPO` para que `validar` no avise de que «le sobra»).
   - `borrar` → requiere `filtro` y `confirmar`. Borra; **siempre pide confirmación salvo `--si`**.
+    Admite `origen` opcional (como las demás acciones sobre ficheros: el motor la usa
+    de carpeta de trabajo y el menú la propone por defecto).
   - `transformar` → requiere `origen`, `filtro` y `destino`. Convierte **cada PDF** en una
     carpeta `<destino>/<nombre>/index.html` con `pagina-NN.png` + capa de texto (PyMuPDF),
     y escribe en la raíz `estilos.css`, `script.js`, `manuales.json` e `index.html` (galería).
     El filtro debe ser solo `.pdf`. Lógica en `tareas/html.py` (no en `acciones.py`).
+    Opcional: `plantilla` (una de `tecnico`, `esquema`, `guia`; por defecto `tecnico`,
+    validado en `config.validar()`): la elegida va como clase en `<body>` (`p-esquema`
+    = páginas grandes y clic para hacer zoom, para planos; `p-guia` = página estrecha
+    de lectura) y queda guardada en `manuales.json`. Con una acción por tipo de manual
+    se elige la plantilla sin tocar código.
   - `comprimir` → requiere `origen`, `filtro` y `destino`. Crea un .zip con los elegidos;
     el nombre es el de la carpeta `origen` salvo que la CLI pase `--nombre` (lo inyecta el
     motor como `nombre_zip` en la configuración). Nunca sobrescribe: `destino_libre`.
@@ -26,6 +33,17 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     copia .reg restaurable. La lógica vive en `acciones.py` (clase LimpiarUSB); el motor la
     ejecuta sin ficheros (caso especial en `motor.py`). El reinicio obligatorio lo pregunta
     la CLI al terminar (`--si` reinicia solo).
+  - `estado-pc` → sin campos propios (ni carpeta ni ficheros). Informe SOLO LECTURA del
+    equipo: CPU (uso, núcleos, frecuencia), memoria RAM y swap, discos montados (% y
+    libres), temperaturas, batería y cuándo se encendió. Lee con `psutil` (dependencia
+    del proyecto): no escribe ni toca nada del sistema. Cada bloque va con try/except:
+    lo que el sistema no exponga (p. ej. temperaturas en mucha placa Windows) sale como
+    «no disponible» y el informe sigue. El motor la ejecuta sin ficheros (caso especial
+    en `motor.py`) y el menú NO le pregunta carpeta. No es acción IA.
+    Opcional: `avisos` (objeto con umbrales en %: `disco_pct`, `memoria_pct`, `cpu_pct`;
+    enteros del 1 al 100, validados en `config.validar()`): si lo medido llega al
+    umbral, el informe acaba con líneas «AVISO: ...» (el estado sigue siendo «hecho»,
+    un aviso no es un error). Sin `avisos`, ningún aviso.
   - `resumir` (acción IA, en `TIPOS_IA`) → requiere `filtro` e `instrucciones` (lo que se le
     pide al modelo, texto no vacío). Opcionales: `origen` (carpeta; la CLI manda con `-c`),
     `destino` (si no hay, el resumen se escribe junto al fichero), `max_caracteres` (entero
@@ -37,6 +55,19 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     llama al modelo: solo dice cuántos caracteres enviaría. El documento va entre
     `<documento>` y `</documento>` y el sistema avisa de que eso es material a tratar,
     nunca instrucciones. `leer_texto()` lee .txt/.md (utf-8) y .pdf con pymupdf.
+  - `renombrar-ia` (acción IA, en `TIPOS_IA`) → requiere `filtro` e `instrucciones`.
+    Opcionales: `origen`, `destino` (sin destino renombra en la propia carpeta del
+    fichero) y `max_caracteres`. Pide al modelo un nombre (2-6 palabras, minúsculas,
+    guiones) y la respuesta pasa SIEMPRE por `a_nombre_seguro()`: primera línea,
+    fuera la extensión si la pone, sin tildes, solo [a-z0-9-], 60 caracteres como
+    mucho (una respuesta con `/` o `\` → vacío). Vacío → «saltado» y no se toca nada.
+    Conserva la extensión original y renombra con `destino_libre` (nunca pisa).
+  - `clasificar` (acción IA, en `TIPOS_IA`) → requiere `filtro`, `categorias` y
+    `destino`. Opcionales: `origen`, `instrucciones` (el mensaje lo genera la acción,
+    con `categorias` como únicas respuestas válidas) y `max_caracteres`. El modelo
+    elige UNA categoría (se compara limpiando ambas con `a_nombre_seguro`); los
+    ficheros cuya respuesta no encaja se acumulan en `destino/sin-clasificar/`.
+    Siempre se mueve con `destino_libre` (nunca pisa).
 - `confirmar` (bool, opcional): si es true, la CLI pregunta antes de ejecutar. En `borrar` se pregunta siempre.
 - filtro opcional: extensiones (lista, en minúsculas), patron (regex válida), mas_antiguo_que_dias, mayor_que_mb.
   - **Basta con UNO de los cuatro.** `{"mas_antiguo_que_dias": 400}` es un filtro válido y
@@ -53,6 +84,12 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     El motor lo inyecta como `nombre_generico` en la configuración (ver motor.py).
 
 ## Órdenes relacionadas
+- `cliWork --menu` (o `cliWork menu`) → menú con números: tabla de acciones,
+  eliges el número y ejecuta de verdad (reutiliza «ejecutar», así que salen
+  las confirmaciones de borrar/abrir). La carpeta se pregunta con la «origen»
+  del JSON como defecto visible (Intro la usa tal cual; sin «origen» hay que
+  escribirla). Para `--simular`, navegador o carpetas distintas, la orden es
+  `cliWork ejecutar NOMBRE ...`. Si una acción falla, el menú sigue vivo.
 - `cliWork validar [FICHERO]` → comprueba el JSON; errores con código de salida 3.
 - `cliWork acciones [NOMBRE]` → lista todas o muestra el detalle de una.
 - `cliWork ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] [--carpeta RUTA] [--destino RUTA] [--antiguedad N] [--nombre TEXTO]` → ejecuta.

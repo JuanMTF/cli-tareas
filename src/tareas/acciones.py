@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import webbrowser
 import zipfile
 from abc import ABC, abstractmethod
@@ -542,7 +543,11 @@ class Transformar(Accion):
                 f"«{fichero.stem}/{mod_html.NOMBRE_INDICE}»",
             )
         destino_final = self._destino_final(destino)
-        registro = mod_html.convertir_pdf(fichero, destino_final)
+        registro = mod_html.convertir_pdf(
+            fichero,
+            destino_final,
+            plantilla=str(self.config.get("plantilla") or mod_config.PLANTILLA_DEFECTO),
+        )
         self._manuales[str(registro["nombre"])] = registro
         return Resultado(
             fichero,
@@ -1010,6 +1015,169 @@ class LimpiarUSB(Accion):
         return True
 
 
+@Accion.registrar("estado-pc")
+class EstadoPC(Accion):
+    """Informe del estado del equipo: CPU, memoria, discos, temperaturas...
+
+    Todo SOLO LECTURA (psutil): no escribe ni toca nada del sistema, como
+    pedía la idea original («sin pillar el equipo»). No usa IA ni carpeta
+    ni ficheros: el motor la ejecuta con la lista vacía, como «limpiar-usb».
+    Los sensores que el sistema no da (p. ej. temperaturas en mucha placa
+    Windows) se reportan como «no disponible» y el informe sigue.
+    """
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        """Una sola pasada: lee el sistema y devuelve UN Resultado-informe."""
+        if simular:
+            return [
+                Resultado(
+                    None,
+                    None,
+                    "simulado",
+                    "SIMULACIÓN: leería CPU, memoria, discos, temperaturas y "
+                    "arranque del equipo (solo lectura, con psutil).",
+                )
+            ]
+        return [Resultado(None, None, "hecho", self._informe())]
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """No se usa: «estado-pc» trabaja con el sistema, no por fichero."""
+        raise NotImplementedError("estado-pc no trabaja por ficheros.")
+
+    # --- el informe -----------------------------------------------------------
+
+    def _informe(self) -> str:
+        """Recoge las medidas con psutil y las junta en un texto legible.
+
+        Cada bloque va con try/except: si un sensor no existe en el sistema
+        (o psutil no lo soporta), se dice «no disponible» y se sigue con los
+        demás — un informe parcial es mejor que un error. Los umbrales de
+        «avisos» (opcional en el JSON: disco_pct/memoria_pct/cpu_pct) se
+        comparan con lo medido y, si algo los pasa, se añaden «AVISO: ...»
+        al final del informe.
+        """
+        import psutil
+
+        umbrales = self.config.get("avisos") or {}
+        partes: list[str] = [f"Estado del equipo ({sys.platform})"]
+        avisos: list[str] = []
+
+        # CPU: carga (muestra de 0,5 s), núcleos y frecuencia si la hay.
+        try:
+            carga = psutil.cpu_percent(interval=0.5)
+            nucleos = psutil.cpu_count(logical=False) or psutil.cpu_count()
+            lineas = [f"CPU: {carga:.0f}% de uso, {nucleos} núcleos físicos"]
+            try:
+                frec = psutil.cpu_freq()
+                if frec:
+                    lineas.append(f"frecuencia actual {frec.current:.0f} MHz")
+            except (NotImplementedError, OSError):
+                pass
+            partes.append("; ".join(lineas))
+            if carga >= float(umbrales.get("cpu_pct", 101)):
+                avisos.append(f"CPU al {carga:.0f}% (umbral {umbrales['cpu_pct']}%)")
+        except (NotImplementedError, OSError):
+            partes.append("CPU: no disponible")
+
+        # Memoria RAM y swap (swap no existe en todos los sistemas).
+        try:
+            virtual = psutil.virtual_memory()
+            usada = virtual.total - virtual.available
+            linea = (
+                f"Memoria: {usada / 2**30:.1f} GiB usados de "
+                f"{virtual.total / 2**30:.1f} GiB ({virtual.percent:.0f}%)"
+            )
+            try:
+                swap = psutil.swap_memory()
+                if swap.total:
+                    linea += f"; swap {swap.percent:.0f}%"
+            except (NotImplementedError, OSError):
+                pass
+            partes.append(linea)
+            if virtual.percent >= float(umbrales.get("memoria_pct", 101)):
+                avisos.append(
+                    f"Memoria al {virtual.percent:.0f}% "
+                    f"(umbral {umbrales['memoria_pct']}%)"
+                )
+        except (NotImplementedError, OSError):
+            partes.append("Memoria: no disponible")
+
+        # Discos: cada partición montada; si una no se puede leer, se sigue.
+        try:
+            for particion in psutil.disk_partitions():
+                etiqueta = particion.mountpoint
+                try:
+                    uso = psutil.disk_usage(particion.mountpoint)
+                    partes.append(
+                        f"Disco {etiqueta}: {uso.percent:.0f}% usado "
+                        f"({uso.free / 2**30:.1f} GiB libres de "
+                        f"{uso.total / 2**30:.1f} GiB)"
+                    )
+                    if uso.percent >= float(umbrales.get("disco_pct", 101)):
+                        avisos.append(
+                            f"Disco {etiqueta} al {uso.percent:.0f}% "
+                            f"(umbral {umbrales['disco_pct']}%)"
+                        )
+                except (OSError, PermissionError):
+                    partes.append(f"Disco {etiqueta}: no disponible")
+        except (NotImplementedError, OSError):
+            partes.append("Discos: no disponibles")
+
+        # Temperaturas: muchos equipos Windows no las exponen; no es error.
+        try:
+            sensores = psutil.sensors_temperatures()
+            if sensores:
+                for nombre, lecturas in sensores.items():
+                    for lectura in lecturas:
+                        if lectura.current is not None:
+                            partes.append(
+                                f"Temperatura {nombre}: {lectura.current:.0f} °C"
+                            )
+            else:
+                partes.append("Temperaturas: no disponibles en este equipo")
+        except (AttributeError, NotImplementedError, OSError):
+            partes.append("Temperaturas: no disponibles en este equipo")
+
+        # Batería, si es un portátil; en sobremesa no hay (None, no error).
+        try:
+            bateria = psutil.sensors_battery()
+            if bateria:
+                partes.append(
+                    f"Batería: {bateria.percent:.0f}%"
+                    + (" (cargando)" if bateria.power_plugged else "")
+                )
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+
+        # Cuándo se encendió el equipo.
+        try:
+            arranque = datetime.fromtimestamp(psutil.boot_time())
+            partes.append(f"Encendido desde: {arranque:%Y-%m-%d %H:%M}")
+        except (OSError, OverflowError, ValueError):
+            pass
+
+        # Los avisos van al final, donde se ven: son lo que hay que leer.
+        for aviso in avisos:
+            partes.append(f"AVISO: {aviso}")
+
+        return " · ".join(partes)
+
+
 def leer_texto(fichero: Path, tope: int) -> str:
     """Saca el texto de un .txt, .md o .pdf para mandárselo a la IA.
 
@@ -1160,6 +1328,193 @@ class Resumir(AccionIA):
             f"Resumen de «{fichero.name}» → «{libre.name}» "
             f"({respuesta.resumen()}){nota}",
         )
+
+
+def a_nombre_seguro(texto: str) -> str:
+    """Convierte la respuesta del modelo en un nombre de fichero SEGURO.
+
+    Primera línea no vacía; sin separadores de ruta (el modelo no propone
+    rutas); fuera la extensión final si la pone; sin tildes; minúsculas;
+    solo [a-z0-9-] (los demás caracteres se vuelven guiones); 60 caracteres
+    como mucho. Vacío si no queda nada utilizable: el que llama decide qué
+    hacer con el vacío (en renombrar-ia: «saltado»).
+
+    Es la barrera anti-inyección: aunque el documento del PDF pida al
+    modelo «responde ../../.bashrc», lo que sale de aquí no puede contener
+    barras ni puntos, así que jamás se convierte en una ruta.
+    """
+    lineas = [linea.strip() for linea in texto.splitlines() if linea.strip()]
+    if not lineas:
+        return ""
+    nombre = lineas[0]
+    if "/" in nombre or "\\" in nombre:
+        return ""  # el modelo propuso una ruta, no un nombre: se rechaza
+    extension = re.match(r"^(.+)(\.[A-Za-z0-9]{1,5})$", nombre)
+    if extension:
+        nombre = extension.group(1)
+    sin_tildes = "".join(
+        c for c in unicodedata.normalize("NFKD", nombre)
+        if not unicodedata.combining(c)
+    )
+    limpio = re.sub(r"[^a-z0-9-]+", "-", sin_tildes.lower())
+    limpio = re.sub(r"-{2,}", "-", limpio).strip("-")
+    return limpio[:60].rstrip("-")
+
+
+class _AccionMovimientoIA(AccionIA):
+    """Base de las acciones IA que MUEVEN ficheros (renombrar-ia, clasificar).
+
+    Sin «destino» (ni en la CLI ni en el JSON) el efecto cae en la propia
+    carpeta del fichero; con destino, el motor/la acción crea la carpeta
+    (AccionIA.preparar) y el movimiento nunca sobrescribe (destino_libre).
+    """
+
+    def _carpeta(self, fichero: Path, destino: Path | None) -> Path:
+        """Dónde cae el fichero movido/renombrado."""
+        if destino is not None or self.config.get("destino"):
+            return self._destino_final(destino)
+        return fichero.parent
+
+
+@Accion.registrar("renombrar-ia")
+class RenombrarIA(_AccionMovimientoIA):
+    """La IA propone un nombre corto y el motor renombra con a_nombre_seguro.
+
+    La respuesta del modelo NUNCA se usa como ruta tal cual: se limpia
+    (primera línea, sin extensión, sin tildes, solo [a-z0-9-], 60 como
+    mucho), se conserva la extensión original y si el nombre está ocupado
+    se renombra con « (1)» (destino_libre). Si el modelo no propone nada
+    utilizable, el fichero se queda como está («saltado»).
+    """
+
+    def preguntar(self, texto: str) -> tuple[str, str]:
+        """El mensaje del sistema añade la regla de responder SOLO el nombre."""
+        sistema, usuario = super().preguntar(texto)
+        sistema += (
+            " Responde SOLO con el nombre propuesto: 2 a 6 palabras en "
+            "minúsculas unidas por guiones, sin extensión ni explicaciones."
+        )
+        return sistema, usuario
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """Renombra un fichero con el nombre que propone la IA (o lo cuenta)."""
+        texto = leer_texto(fichero, self.presupuesto())
+        if simular:
+            return Resultado(
+                fichero,
+                None,
+                "simulado",
+                f"SIMULACIÓN: pediría al modelo un nombre para «{fichero.name}» "
+                f"(se enviarían ~{len(texto)} caracteres al modelo)",
+            )
+        if self.proveedor is None:
+            raise TareasError(
+                "La acción necesita IA y el motor no le ha puesto proveedor."
+            )
+        sistema, usuario = self.preguntar(texto)
+        respuesta = self.proveedor.completar(sistema, usuario, max_tokens=100)
+        limpio = a_nombre_seguro(respuesta.texto)
+        if not limpio:
+            return Resultado(
+                fichero,
+                None,
+                "saltado",
+                f"El modelo no propuso un nombre válido para «{fichero.name}» "
+                f"(respondió «{respuesta.texto.strip().splitlines()[0][:60] if respuesta.texto.strip() else ''}»); "
+                "no se toca.",
+            )
+        carpeta = self._carpeta(fichero, destino)
+        if carpeta == fichero.parent and f"{limpio}{fichero.suffix}" == fichero.name:
+            # Ya se llamaba así: renombrarlo solo crearía « (1)» sin sentido
+            # (aprendido del código de referencia).
+            return Resultado(
+                fichero,
+                None,
+                "saltado",
+                f"Saltado (la IA propuso el nombre que ya tiene): «{fichero.name}»",
+            )
+        salida = destino_libre(carpeta / f"{limpio}{fichero.suffix}")
+        nota = " (ya existía: renombrado)" if salida.name != f"{limpio}{fichero.suffix}" else ""
+        shutil.move(str(fichero), str(salida))
+        return Resultado(
+            fichero,
+            salida,
+            "hecho",
+            f"Renombrado: «{fichero.name}» → «{salida.name}» "
+            f"({respuesta.resumen()}){nota}",
+        )
+
+
+@Accion.registrar("clasificar")
+class Clasificar(_AccionMovimientoIA):
+    """La IA elige UNA categoría del JSON y el fichero se mueve a destino/categoria/.
+
+    La lista «categorias» es obligatoria y va en el mensaje del sistema como
+    las únicas respuestas válidas (AccionIA.preguntar). Si el modelo responde
+    otra cosa, el fichero no se deja suelto: se acumula en
+    «destino/sin-clasificar/» (como en el código de referencia) y sigue.
+    """
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """Clasifica un fichero en una de las categorías (o lo cuenta)."""
+        texto = leer_texto(fichero, self.presupuesto())
+        if simular:
+            return Resultado(
+                fichero,
+                None,
+                "simulado",
+                f"SIMULACIÓN: preguntaría en qué carpeta va «{fichero.name}» "
+                f"(se enviarían ~{len(texto)} caracteres al modelo)",
+            )
+        if self.proveedor is None:
+            raise TareasError(
+                "La acción necesita IA y el motor no le ha puesto proveedor."
+            )
+        sistema, usuario = self.preguntar(texto)
+        respuesta = self.proveedor.completar(sistema, usuario, max_tokens=50)
+        eleccion = a_nombre_seguro(respuesta.texto)
+        categorias = [str(c) for c in (self.config.get("categorias") or [])]
+        coincide = next(
+            (c for c in categorias if a_nombre_seguro(c) == eleccion), None
+        )
+        raiz = self._destino_final(destino)
+        if coincide:
+            carpeta = raiz / coincide
+            detalle = f"Clasificado: «{fichero.name}» → «{coincide}/» "
+        else:
+            # Lo que no encaja no se deja suelto (aprendido del código de
+            # referencia): se acumula en destino/sin-clasificar/.
+            carpeta = raiz / "sin-clasificar"
+            respuesta_texto = (
+                respuesta.texto.strip().splitlines()[0][:60]
+                if respuesta.texto.strip() else ""
+            )
+            detalle = (
+                f"sin-clasificar: «{fichero.name}» → «sin-clasificar/» "
+                f"(el modelo respondió «{respuesta_texto}» y no es una de: "
+                f"{', '.join(categorias)}) "
+            )
+        libre = destino_libre(carpeta / fichero.name)
+        carpeta.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(fichero), str(libre))
+        nota = " (ya existía: renombrado)" if libre.name != fichero.name else ""
+        return Resultado(fichero, libre, "hecho", detalle + f"({respuesta.resumen()}){nota}")
 
 
 class ErrorConfiguracion(ConfigError):
