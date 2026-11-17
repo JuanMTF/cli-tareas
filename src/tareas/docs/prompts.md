@@ -1082,4 +1082,68 @@ revisar código ajeno no es copiarlo: se toma la IDEA buena (un solo
 sitio que convierte excepción en salida limpia) y se deja fuera el
 detalle que no aplica (su nombre de programa, su punto de inyección).
 
+## 17-11-2026 · Los dos fallos reales del modelo en las acciones IA
+
+Los dos tropiezos de la semana 3 que faltaban por apuntar: la línea del
+examen y la categoría que no existía. Los ficheros (acciones.json)
+quedaron corregidos ANTES de su primer commit, así que en el historial
+no se ve el fallo: aquí queda el cómo y el porqué.
+
+### Prompt 13
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+instrucciones de resumir-apuntes v1: «Resume en 5 viñetas como máximo.
+Al final añade una sección "Para el examen" con lo más importante.»
+
+**Qué corregí del plan:**
+la línea «Para el examen:» salía VACÍA: al pedir una "sección", el
+modelo a veces la dejaba sin rellenar o la mezclaba con las viñetas.
+Instrucciones v2 (la commiteada): «Acaba con una línea que empiece por
+«Para el examen:» y diga, en una frase, lo que más cuenta.» — prefijo
+literal y formato cerrado.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+la v1 entera: una "sección" deja el formato al aire; con el prefijo
+literal la salida se puede comprobar (¿empieza por «Para el examen:»?).
+
+**Funcionaba a la primera:**
+no: dos pasadas más hasta la v2; con ella la línea sale siempre.
+
+**Qué aprendí:**
+para un formato exacto, la instrucción debe contener el prefijo literal
+y cerrar la forma («una línea», «en una frase»): un hueco abierto
+("sección", "añade al final") el modelo lo puede dejar vacío.
+
+### Prompt 14
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+clasificar-descargas v1 con categorías «facturas, apuntes, manuales».
+Con un calendario escolar el modelo contestó «sistemas»: una carpeta que
+no estaba en la lista.
+
+**Qué corregí del plan:**
+dos barreras: (1) el mensaje del sistema cierra la respuesta («Responde
+SOLO con una de estas opciones: ...», lo añade AccionIA.preguntar con
+las categorías del JSON) y (2) la categoría «otros» como salida de
+escape: lo que no es factura, apuntes ni manual tiene a dónde ir.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+rechacé «que se cree la carpeta que diga el modelo»: cualquier respuesta
+rara crearía carpetas sueltas. El código compara la respuesta con la
+lista (tolerando tildes y mayúsculas) y lo que no encaja va a
+sin-clasificar/: la carpeta la decide el JSON, nunca el modelo.
+
+**Funcionaba a la primera:**
+no: el calendario acabó en «sistemas» con la v1; con la v2 (lista
+cerrada + «otros») cae en «otros/», y la comparación en Python lo
+garantiza aunque el modelo se salga de la lista.
+
+**Qué aprendí:**
+al modelo se le da una lista cerrada Y una opción de escape: sin escape
+responde cualquier cosa; y sin validación en el código, también. Las dos
+barreras juntas (instrucción + comparación en el código) son las que
+impiden que se invente ni una carpeta.
+
 

@@ -1383,7 +1383,13 @@ def a_nombre_seguro(texto: str) -> str:
     )
     limpio = re.sub(r"[^a-z0-9-]+", "-", sin_tildes.lower())
     limpio = re.sub(r"-{2,}", "-", limpio).strip("-")
-    return limpio[:60].rstrip("-")
+    limpio = limpio[:60].rstrip("-")
+    # Invariante anti-inyección (aserción de desarrollo): de aquí NUNCA sale
+    # una ruta. Si saliera sería un bug del limpiado (error del programador,
+    # no del usuario) y en desarrollo se rompe aquí mismo, no más tarde al
+    # mover ficheros.
+    assert "/" not in limpio and "\\" not in limpio
+    return limpio
 
 
 class _AccionMovimientoIA(AccionIA):
@@ -1541,6 +1547,9 @@ class Clasificar(_AccionMovimientoIA):
                 f"(el modelo respondió «{respuesta_texto}» y no es una de: "
                 f"{', '.join(categorias)}) "
             )
+        # Invariante (aserción de desarrollo): la carpeta la decide el JSON,
+        # nunca el modelo — solo una categoría de la lista o sin-clasificar.
+        assert carpeta.name == "sin-clasificar" or carpeta.name in categorias
         libre = destino_libre(carpeta / fichero.name)
         carpeta.mkdir(parents=True, exist_ok=True)
         shutil.move(str(fichero), str(libre))
