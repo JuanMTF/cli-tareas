@@ -85,8 +85,28 @@ Write-Host ""
 Write-Host "[1] pytest"
 # --basetemp fijo: sin el, el limpiado de temporales de pytest da
 # PermissionError en Windows al cerrar la sesion y parece que fallan los tests.
-$pytest = & uv run pytest -q --basetemp "$env:TEMP\tareas-pytest-bateria" 2>&1
-Paso "pytest pasa los tests" ($LASTEXITCODE -eq 0) (($pytest | Select-Object -Last 1) -join "")
+# La carpeta se quita ANTES de correr pytest por si una ejecucion anterior la
+# dejo en mal estado (Ctrl+C a mitad, proceso colgado): si no se puede borrar
+# (Acceso denegado), se usa una carpeta UNICA de esta ejecucion y la bateria
+# sigue en verde en vez de dar 75 errores de setup.
+$basetemp = Join-Path $env:TEMP "tareas-pytest-bateria"
+if (Test-Path $basetemp) {
+    try {
+        Remove-Item -Recurse -Force $basetemp -ErrorAction Stop
+    } catch {
+        $basetemp = Join-Path $env:TEMP ("tareas-pytest-bateria-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+        Write-Host ("       aviso: la carpeta pytest anterior esta bloqueada; uso otra: {0}" -f $basetemp) -ForegroundColor Yellow
+    }
+}
+$pytest = & uv run pytest -q --basetemp $basetemp 2>&1
+$detallePytest = (($pytest | Select-Object -Last 1) -join "")
+if ($LASTEXITCODE -ne 0) {
+    # La ultima linea solo dice "N passed, M errors": una pista de la causa.
+    $pista = ($pytest | Where-Object { $_ -match "^\S+ - (PermissionError|OSError|WinError)" } | Select-Object -First 1)
+    if ($pista) { $detallePytest = "{0}  <- {1}" -f $detallePytest, (($pista -join "") -replace " - ", ": ") }
+    $detallePytest = "{0}  (sin -q se ve la causa completa: uv run pytest)" -f $detallePytest
+}
+Paso "pytest pasa los tests" ($LASTEXITCODE -eq 0) $detallePytest
 
 # --- 2. Ordenes basicas -----------------------------------------------------
 
@@ -332,20 +352,28 @@ if ($SoloSimular) {
     # 4.10 resumir-apuntes REAL: solo si hay .env (config de IA del .env).
     #     Convierte el manual-ia.pdf del sandbox en un <nombre>.resumen.md en
     #     el sandbox y comprueba que el mensaje informa de tokens y segundos.
-    #     Con el modelo gratuito el servidor a veces responde 429 (demasiadas
-    #     peticiones): se espera un minuto y se reintenta una vez.
+    #     Con el modelo gratuito el servidor a veces responde 429 (cola
+    #     saturada) o 5xx (fallo interno momentaneo): se espera un minuto y
+    #     se reintenta, hasta 3 intentos en total.
     if (Test-Path ".env") {
         $intentos = 0
         do {
             $intentos++
             $iaReal = Tareas @("ejecutar", "resumir-apuntes", $origenIA, "-d", $destinoIA, "--si")
-            if (($iaReal.Texto -match "429") -and ($intentos -lt 2)) {
-                Write-Host "       429: demasiadas peticiones; esperando 60 s y reintentando..." -ForegroundColor Yellow
+            # 429 (saturado) y 5xx (fallo interno) son TRANSITORIOS: reintenta.
+            # 401/403/404 no: esos son de configuracion y no se reintentan.
+            $transitorio = $iaReal.Texto -match "responde (429|5\d\d)"
+            if ($transitorio -and ($intentos -lt 3)) {
+                Write-Host ("       servidor saturado ({0}); esperando 60 s y reintentando ({1} de 2)..." -f $Matches[1], $intentos) -ForegroundColor Yellow
                 Start-Sleep -Seconds 60
             }
-        } while (($iaReal.Texto -match "429") -and ($intentos -lt 2))
+        } while (($iaReal.Texto -match "responde (429|5\d\d)") -and ($intentos -lt 3))
         $resumen = Join-Path $destinoIA "manual-ia.resumen.md"
-        Paso "resumir real termina con codigo 0" ($iaReal.Codigo -eq 0) $iaReal.Texto
+        $detalleIA = $iaReal.Texto.Trim()
+        if (($iaReal.Codigo -eq 4) -and ($detalleIA -match "responde (429|5\d\d)")) {
+            $detalleIA = "{0}`n       (el modelo gratuito esta saturado o caido: NO es un fallo de la CLI; reejecuta la bateria mas tarde)" -f $detalleIA
+        }
+        Paso "resumir real termina con codigo 0" ($iaReal.Codigo -eq 0) $detalleIA
         Paso "resumir real crea el resumen .md del PDF" ((Test-Path $resumen) -and ((Get-Item $resumen).Length -gt 0))
         Paso "resumir real informa de tokens y segundos" ($iaReal.Texto -match "tokens")
     } else {

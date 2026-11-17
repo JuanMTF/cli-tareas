@@ -120,8 +120,19 @@ def _aviso_sin_ia(exc: TareasError) -> None:
     if isinstance(exc, IANoDisponible):
         consola_err.print(
             "[yellow]Aviso:[/yellow] las acciones sin IA siguen funcionando "
-            "(por ejemplo: listar, validar, estado-pc)."
+            "(por ejemplo: listar, validar, estado-pc); mira cuáles son con "
+            "«cliWork acciones»."
         )
+
+
+def fallo(exc: TareasError) -> NoReturn:
+    """Un error previsto del motor: aviso sin IA si toca, línea roja y su código.
+
+    Un solo sitio que convierte la excepción en salida limpia (idea del
+    profe): así ningún «except TareasError» se olvida del aviso de la IA.
+    """
+    _aviso_sin_ia(exc)
+    _error(str(exc), codigo=exc.codigo_salida)
 
 
 def _ruta_config(ctx: Any) -> Path:
@@ -413,7 +424,7 @@ def comprobar_ia() -> None:
     try:
         proveedor = ProveedorCentro.desde_entorno()
     except TareasError as exc:
-        _error(str(exc), codigo=exc.codigo_salida)
+        fallo(exc)
 
     consola.print(f"Servidor:    [cyan]{escape(proveedor.url)}[/cyan]")
     consola.print(f"Modelo:      [cyan]{escape(proveedor.modelo)}[/cyan]")
@@ -429,7 +440,7 @@ def comprobar_ia() -> None:
             SISTEMA_PRUEBA, "Responde solo: OK", max_tokens=5
         )
     except TareasError as exc:
-        _error(str(exc), codigo=exc.codigo_salida)
+        fallo(exc)
 
     consola.print(f"[green]✔ Respuesta del modelo: {escape(respuesta.texto.strip())}[/green]")
     consola.print(respuesta.resumen())
@@ -517,17 +528,48 @@ def indexar(
         typer.echo(mensaje)
 
 
+def _con_guion(ruta: Path) -> str:
+    """La ruta abreviada: «~/...» si cuelga de la carpeta del usuario.
+
+    Así la tabla de simulación enseña rutas cortas («~/Descargas/a.pdf»)
+    aunque el motor trabaje con rutas absolutas.
+    """
+    texto = str(ruta)
+    try:
+        casa = str(Path.home())
+    except (OSError, RuntimeError):
+        return texto  # sin carpeta de usuario: la ruta tal cual
+    if texto == casa:
+        return "~"
+    if texto.startswith(casa + "\\") or texto.startswith(casa + "/"):
+        return "~" + texto[len(casa) :]
+    return texto
+
+
+def _con_guion_texto(texto: str) -> str:
+    """Abrevia con ~ las rutas que cuelgan de la carpeta del usuario.
+
+    Los mensajes de las acciones llevan rutas absolutas («SIMULACIÓN:
+    movería «a.txt» → «C:\\Users\\...\\Destino\\a.txt»»); en la tabla se ven
+    cortas («~\\...\\Destino\\a.txt»), como pide la guía.
+    """
+    try:
+        casa = str(Path.home())
+    except (OSError, RuntimeError):
+        return texto
+    for separador in ("\\", "/"):
+        texto = texto.replace(casa + separador, "~" + separador)
+    return texto
+
+
 def _mostrar_simulacion(nombre: str, resultados: list[Resultado]) -> None:
     """Tabla «fichero → destino» con estado para --simular; no toca nada.
 
     Los resultados sin rutas (el tipo «abrir» y el aviso de filtro vacío)
-    no van en la tabla: se muestran como texto, como hasta ahora.
+    no van en la tabla: se muestran como texto, como hasta ahora. La
+    columna «Detalle» solo aparece si algún resultado trae detalle, y las
+    rutas que aparecen en el detalle y en el pie salen abreviadas con ~.
     """
-    tabla = Table(title=f"Simulación de «{escape(nombre)}»: no se toca nada")
-    tabla.add_column("Fichero", style="cyan")
-    tabla.add_column("Destino")
-    tabla.add_column("Estado")
-    tabla.add_column("Detalle")
     filas: list[tuple[str, str, str, str]] = []
     for resultado in resultados:
         if resultado.origen is None and resultado.destino is None:
@@ -541,21 +583,59 @@ def _mostrar_simulacion(nombre: str, resultados: list[Resultado]) -> None:
                 resultado.origen.name if resultado.origen else "—",
                 resultado.destino.name if resultado.destino else "—",
                 f"[yellow]{escape(resultado.estado)}[/yellow]",
-                escape(resultado.mensaje),
+                escape(_con_guion_texto(resultado.mensaje)),
             )
         )
-    if filas:
-        for fichero, destino_celda, estado_celda, detalle_celda in filas:
-            tabla.add_row(escape(fichero), escape(destino_celda), estado_celda, detalle_celda)
-        # Si todas las filas van a la misma carpeta, se indica una sola vez.
-        destinos_padre = {
-            resultado.destino.parent
-            for resultado in resultados
-            if resultado.destino is not None
-        }
-        if len(destinos_padre) == 1:
-            carpeta = destinos_padre.pop()
-            tabla.caption = f"Todo dentro de: {escape(str(carpeta))}"
+    if not filas:
+        return
+    hay_detalle = any(detalle.strip() for _, _, _, detalle in filas)
+    tabla = Table(title=f"Simulación de «{escape(nombre)}»: no se toca nada")
+    tabla.add_column("Fichero", style="cyan")
+    tabla.add_column("Destino")
+    tabla.add_column("Estado")
+    if hay_detalle:
+        tabla.add_column("Detalle")
+    for fichero, destino_celda, estado_celda, detalle_celda in filas:
+        celdas = [escape(fichero), escape(destino_celda), estado_celda]
+        if hay_detalle:
+            celdas.append(detalle_celda)
+        tabla.add_row(*celdas)
+    # Si todas las filas van a la misma carpeta, se indica una sola vez
+    # (con la ruta abreviada: «~/Documentos/PDF», no la absoluta).
+    destinos_padre = {
+        resultado.destino.parent
+        for resultado in resultados
+        if resultado.destino is not None
+    }
+    if len(destinos_padre) == 1:
+        carpeta = destinos_padre.pop()
+        tabla.caption = f"Todo dentro de: {escape(_con_guion(carpeta))}"
+    consola.print(tabla)
+
+
+def _mostrar_informe_estado(resultados: list[Resultado]) -> None:
+    """El informe de «estado-pc» como tabla (Componente / Dato).
+
+    La acción devuelve el informe multilínea (una medida por línea,
+    «Componente: dato»); aquí solo se pinta. Los «AVISO: ...» van al final
+    del informe y en la tabla salen destacados en amarillo, a lo ancho.
+    """
+    for resultado in resultados:
+        lineas = resultado.mensaje.splitlines() or ["Estado del equipo"]
+        tabla = Table(title=escape(lineas[0]))
+        tabla.add_column("Componente", style="cyan")
+        tabla.add_column("Dato")
+        for linea in lineas[1:]:
+            if linea.startswith("AVISO: "):
+                tabla.add_row("", f"[yellow]{escape(linea)}[/yellow]")
+                continue
+            # Se corta en el PRIMER «: » (los discos «C:\» llevan su dos
+            # puntos dentro de la etiqueta: solo el separador tiene espacio).
+            par = linea.split(": ", 1)
+            if len(par) == 2:
+                tabla.add_row(escape(par[0]), escape(par[1]))
+            else:
+                tabla.add_row(escape(linea), "")
         consola.print(tabla)
 
 
@@ -786,8 +866,7 @@ def ejecutar(
                 nombre_zip=nombre_zip,
             )
         except TareasError as exc:
-            _aviso_sin_ia(exc)
-            _error(str(exc), codigo=exc.codigo_salida)
+            fallo(exc)
         _mostrar_simulacion(nombre, resultados)
         _mostrar_resumen(resultados)
         return
@@ -824,13 +903,16 @@ def ejecutar(
             nombre_zip=nombre_zip,
         )
     except TareasError as exc:
-        _aviso_sin_ia(exc)
-        _error(str(exc), codigo=exc.codigo_salida)
+        fallo(exc)
 
-    for resultado in resultados:
-        typer.echo(resultado.mensaje)
-        if not resultado.exito:
-            _error(resultado.mensaje, codigo=1)
+    if tipo == "estado-pc":
+        # El informe se pinta como tabla; el Resultado nunca es fallo.
+        _mostrar_informe_estado(resultados)
+    else:
+        for resultado in resultados:
+            typer.echo(resultado.mensaje)
+            if not resultado.exito:
+                _error(resultado.mensaje, codigo=1)
     _mostrar_resumen(resultados)
 
     # «limpiar-usb» termina SIEMPRE avisando del reinicio obligatorio; se

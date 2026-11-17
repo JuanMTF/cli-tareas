@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tareas.acciones import Clasificar, RenombrarIA, a_nombre_seguro
+from tareas.acciones import Clasificar, RenombrarIA, Resumir, a_nombre_seguro
 from tareas.ia import ProveedorIA, Respuesta
 
 
@@ -27,6 +27,19 @@ class _ProveedorFijo(ProveedorIA):
         self, sistema: str, usuario: str, max_tokens: int = 800
     ) -> Respuesta:
         return Respuesta(self.texto, 1, 1, 0.0)
+
+
+class _ProveedorRompe(ProveedorIA):
+    """Proveedor de pruebas que FALLA si le llaman.
+
+    Sirve para comprobar que una acción NO llega a consultar al modelo:
+    si algún camino llama a completar(), el test se rompe aquí.
+    """
+
+    def completar(
+        self, sistema: str, usuario: str, max_tokens: int = 800
+    ) -> Respuesta:
+        raise AssertionError("El modelo no debía recibir ninguna llamada")
 
 
 def _ejecutar(accion, fichero: Path, texto: str):
@@ -56,9 +69,26 @@ def _config_clasificar(tmp_path: Path) -> dict:
     }
 
 
+def _config_resumir() -> dict:
+    return {
+        "nombre": "prueba-resumir",
+        "descripcion": "prueba del tipo resumir",
+        "tipo": "resumir",
+        "filtro": {"extensiones": [".txt"]},
+        "instrucciones": "Resume en dos líneas.",
+    }
+
+
 def _fichero(tmp_path: Path, nombre: str) -> Path:
     fichero = tmp_path / nombre
     fichero.write_text("contenido de prueba", encoding="utf-8")
+    return fichero
+
+
+def _fichero_sin_texto(tmp_path: Path, nombre: str) -> Path:
+    """Un PDF escaneado (sin capa de texto) o un .txt vacío, para leer_texto()."""
+    fichero = tmp_path / nombre
+    fichero.write_text("", encoding="utf-8")
     return fichero
 
 
@@ -189,3 +219,50 @@ def test_clasificar_simular_no_llama_al_modelo(tmp_path: Path) -> None:
     assert resultado.estado == "simulado"
     assert accion.proveedor is None
     assert fichero.exists()  # con --simular no se mueve nada
+
+
+# --- fichero sin texto (PDF escaneado o vacío) --------------------------------
+
+
+def test_resumir_sin_texto_salta_y_no_llama_al_modelo(tmp_path: Path) -> None:
+    """Decisión del paso 8: un PDF sin texto NO llega al modelo, se salta."""
+    fichero = _fichero_sin_texto(tmp_path, "escaneado.txt")
+    accion = Resumir(_config_resumir())
+    accion.proveedor = _ProveedorRompe()
+    resultado = accion.ejecutar([fichero], False)[0]
+    assert resultado.estado == "saltado"
+    assert "no tiene texto extraíble" in resultado.mensaje
+    assert fichero.exists()  # nada se mueve ni se borra
+    assert not list(tmp_path.glob("*.resumen.md"))  # y no se escribe resumen
+
+
+def test_resumir_simular_con_fichero_sin_texto_salta(tmp_path: Path) -> None:
+    """Ni en la simulación se anuncia «~0 caracteres»: se saltaría igual."""
+    fichero = _fichero_sin_texto(tmp_path, "escaneado.txt")
+    accion = Resumir(_config_resumir())
+    resultado = accion.ejecutar([fichero], True)[0]
+    assert resultado.estado == "saltado"
+    assert "se enviarían" not in resultado.mensaje
+
+
+def test_renombrar_ia_sin_texto_salta(tmp_path: Path) -> None:
+    """Sin texto que leer, el modelo no recibe nada y el fichero queda igual."""
+    fichero = _fichero_sin_texto(tmp_path, "escaneado.txt")
+    accion = RenombrarIA(_config_renombrar())
+    accion.proveedor = _ProveedorRompe()
+    resultado = accion.ejecutar([fichero], False)[0]
+    assert resultado.estado == "saltado"
+    assert fichero.exists()
+    assert [p.name for p in tmp_path.iterdir()] == ["escaneado.txt"]
+
+
+def test_clasificar_sin_texto_salta(tmp_path: Path) -> None:
+    """Sin texto no hay categoría: saltado, y nada acaba en sin-clasificar."""
+    fichero = _fichero_sin_texto(tmp_path, "escaneado.txt")
+    accion = Clasificar(_config_clasificar(tmp_path))
+    accion.proveedor = _ProveedorRompe()
+    resultado = accion.ejecutar([fichero], False)[0]
+    assert resultado.estado == "saltado"
+    assert fichero.exists()
+    destino = tmp_path / "ClasificacionIA"
+    assert not destino.exists() or not any(destino.iterdir())  # no se movió nada

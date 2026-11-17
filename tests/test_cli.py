@@ -874,6 +874,73 @@ def test_menu_propone_la_carpeta_del_json(tmp_path: Path) -> None:
     assert not (origen / "viejo.txt").exists()
 
 
+def test_tabla_simulacion_rutas_con_virgulilla(tmp_path: Path) -> None:
+    """La tabla de «--simular» muestra las rutas con ~ (si cuelgan de casa)."""
+    origen = tmp_path / "Origen"
+    origen.mkdir()
+    (origen / "a.txt").write_text("x", encoding="utf-8")
+    destino = tmp_path / "Destino"
+    config_ruta = tmp_path / "acciones.json"
+    config_ruta.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "mover-prueba",
+                        "descripcion": "mueve los .txt",
+                        "tipo": "mover",
+                        "origen": str(origen),
+                        "filtro": {"extensiones": [".txt"]},
+                        "destino": str(destino),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resultado = runner.invoke(
+        app, ["--config", str(config_ruta), "ejecutar", "mover-prueba", "--simular"]
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "~" in texto  # las rutas del detalle y del pie salen con ~
+    assert "Detalle" in texto  # la columna Detalle está (hay resultados con él)
+    assert "Todo dentro de" in texto  # el pie de tabla aparece con su ruta
+
+
+def test_estado_pc_se_pinta_como_tabla(tmp_path: Path) -> None:
+    """`ejecutar estado-pc` pinta el informe como tabla con los AVISO dentro."""
+    config_ruta = tmp_path / "acciones.json"
+    config_ruta.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "estado-pc-prueba",
+                        "descripcion": "informe del equipo",
+                        "tipo": "estado-pc",
+                        "avisos": {"cpu_pct": 1, "memoria_pct": 1, "disco_pct": 1},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resultado = runner.invoke(
+        app, ["--config", str(config_ruta), "ejecutar", "estado-pc-prueba"]
+    )
+    assert resultado.exit_code == 0, _texto(resultado)
+    texto = _texto(resultado)
+    assert "Estado del equipo" in texto  # el título de la tabla
+    assert "Componente" in texto  # la cabecera
+    assert "Memoria" in texto  # una fila de medida (siempre existe)
+    assert "AVISO: CPU al" in texto  # los avisos, destacados en la tabla
+
+
 def test_acciones_tabla_lleva_columna_ia() -> None:
     """`cliWork acciones`: columna «IA» (sí / —) como pide la semana 3."""
     resultado = runner.invoke(app, ["acciones"])

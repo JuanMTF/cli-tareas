@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-11-04
-- Autor/a: [tu nombre]
+- Autor/a: [Juan Manuel Tudo ]
 
 ## Contexto
 
@@ -25,8 +25,16 @@ lee, valida y ejecuta ese fichero. Añadir una acción = editar el JSON.
    - En contra: cada cambio exige tocar el código y volver a instalar; quien
      no programa no puede añadir acciones.
 2. Usar YAML o TOML en vez de JSON.
-   - A favor: [...]
-   - En contra: [...]
+   - A favor: [ A favor: admite comentarios (#) dentro del propio fichero, así que
+     cada acción puede explicarse junto a sus datos; sintaxis menos
+     ruidosa (claves sin comillas, listas más cortas); es el formato que
+     este mismo proyecto ya usa en pyproject.toml y uv.lock, así que hay
+     un ejemplo cerca.]
+   - En contra: [ - En contra: habría que convertir el acciones.json que ya existe y
+     reescribir la lectura en config.py (el validador casi no cambia);
+     el coloreado de TOML es menos común en editores básicos que el de
+     JSON; sería una decisión «por afinidad con uv», no por necesidad.
+]
 3. [Otra que se te ocurra o que te propusiera la IA]
 
 ## Consecuencias

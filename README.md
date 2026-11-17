@@ -13,8 +13,9 @@ JSON, nunca el código (ADR-0001).
 - `uv run cliWork acciones [NOMBRE]` — lista las acciones o muestra el detalle.
 - `uv run cliWork listar CARPETA` — tabla con el contenido de una carpeta.
 - `uv run cliWork ejecutar estado-pc` — informe del estado del equipo (CPU,
-  memoria, discos, temperaturas, batería, arranque) con avisos si algo pasa
-  los umbrales del JSON (`avisos`: disco/memoria/CPU en %). Solo lectura.
+  memoria, discos, temperaturas, batería, arranque) en una tabla, con avisos
+  si algo pasa los umbrales del JSON (`avisos`: disco/memoria/CPU en %).
+  Solo lectura.
 - `uv run cliWork --menu` — menú con números para lanzar acciones sin teclear
   órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones). La
   carpeta que propone por defecto es la «origen» del JSON (si la acción no

@@ -1118,9 +1118,11 @@ class EstadoPC(Accion):
             partes.append("Memoria: no disponible")
 
         # Discos: cada partición montada; si una no se puede leer, se sigue.
+        # La etiqueta pierde la barra final («C:\» → «C»): en la tabla y en
+        # los mensajes no hacen falta barras (y Rich escapa «C:\» feo).
         try:
             for particion in psutil.disk_partitions():
-                etiqueta = particion.mountpoint
+                etiqueta = particion.mountpoint.rstrip("\\/: ") or particion.mountpoint
                 try:
                     uso = psutil.disk_usage(particion.mountpoint)
                     partes.append(
@@ -1175,7 +1177,8 @@ class EstadoPC(Accion):
         for aviso in avisos:
             partes.append(f"AVISO: {aviso}")
 
-        return " · ".join(partes)
+        # Multilínea: la CLI lo pinta como tabla (una medida por fila).
+        return "\n".join(partes)
 
 
 def leer_texto(fichero: Path, tope: int) -> str:
@@ -1228,6 +1231,25 @@ class AccionIA(Accion):
         """El tope de caracteres que se mandan al modelo (max_caracteres)."""
         tope = self.config.get("max_caracteres")
         return tope if isinstance(tope, int) else mod_config.MAX_CARACTERES_DEFECTO
+
+    def _resultado_sin_texto(self, fichero: Path, texto: str) -> Resultado | None:
+        """Un fichero SIN texto no se consulta al modelo: se salta.
+
+        Un PDF escaneado (una imagen sin capa de texto) o un .txt/.md vacío
+        devuelven texto vacío en leer_texto(): preguntar sobre un documento
+        vacío gasta una llamada del centro para un resumen de nada. Decisión
+        del paso 8 (sesión 3): SALTAR y avisar; el fichero no se toca ni se
+        mueve, y ni con --simular se anuncia «~0 caracteres».
+        """
+        if texto.strip():
+            return None
+        return Resultado(
+            fichero,
+            None,
+            "saltado",
+            f"Saltado: «{fichero.name}» no tiene texto extraíble "
+            "(¿PDF escaneado o fichero vacío?): no se manda nada al modelo.",
+        )
 
     def preguntar(self, texto: str) -> tuple[str, str]:
         """El (sistema, usuario) que se le manda al modelo.
@@ -1296,6 +1318,9 @@ class Resumir(AccionIA):
     ) -> Resultado:
         """Resume un fichero (o cuenta caracteres, con --simular)."""
         texto = leer_texto(fichero, self.presupuesto())
+        salto = self._resultado_sin_texto(fichero, texto)
+        if salto is not None:
+            return salto
         salida = self._salida(fichero, destino)
         if simular:
             return Resultado(
@@ -1407,6 +1432,9 @@ class RenombrarIA(_AccionMovimientoIA):
     ) -> Resultado:
         """Renombra un fichero con el nombre que propone la IA (o lo cuenta)."""
         texto = leer_texto(fichero, self.presupuesto())
+        salto = self._resultado_sin_texto(fichero, texto)
+        if salto is not None:
+            return salto
         if simular:
             return Resultado(
                 fichero,
@@ -1474,6 +1502,9 @@ class Clasificar(_AccionMovimientoIA):
     ) -> Resultado:
         """Clasifica un fichero en una de las categorías (o lo cuenta)."""
         texto = leer_texto(fichero, self.presupuesto())
+        salto = self._resultado_sin_texto(fichero, texto)
+        if salto is not None:
+            return salto
         if simular:
             return Resultado(
                 fichero,

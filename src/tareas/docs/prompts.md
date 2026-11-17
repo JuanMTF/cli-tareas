@@ -989,4 +989,97 @@ no por cargar_acciones): validar ✔ 15 acciones y 144 tests.
 aviso ≠ error: informar no debe cambiar los códigos de salida; y los
 umbrales viven en el JSON, no en el código — cada equipo los suyos.
 
+### Prompt 10
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+puedes hacer que el estado de pc se vea en una tabla.
+
+**Qué corregí del plan:**
+la acción ahora devuelve el informe MULTILÍNEA («Componente: dato», una
+medida por línea) y cli.py lo pinta con _mostrar_informe_estado: tabla
+Rich «Componente / Dato» con el título «Estado del equipo (win32)» y los
+AVISO como fila a lo ancho en amarillo. Con --simular y el «Resumen: 1
+hecho(s)» todo igual. El corte se hace en el PRIMER «: » porque el
+separador lleva espacio (así «Encendido desde: 2026-11-13 19:09» no se
+rompe en la hora).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+la primera versión puso «Disco C:\» en la columna equivocada: el regex
+cortaba en el «:» de la unidad y el escapado de Rich dejaba «C:\\\» feo.
+Se arregló de raíz: la etiqueta del disco va SIN barra final («Disco C»),
+que es lo que quería la celda, no un parche en el pintado.
+
+**Funcionaba a la primera:**
+no: fallo el corte de los discos (fue lo de arriba); tras corregirlo,
+146 tests en verde con el test nuevo del renderizado.
+
+**Qué aprendí:**
+la acción da datos y la CLI los pinta: el mensaje multilínea es texto
+plano (sirve para echo y tests) y solo la CLI conoce Rich; y con las
+barras de Windows («C:\») es mejor limpiar la etiqueta que pelear con el
+escapado en la vista.
+
+### Prompt 11
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+amplía SOLO cli.py: 1) ProveedorCentro.desde_entorno() solo si la acción
+necesita IA y no hay --simular; 2) «tareas acciones»: columna IA (sí / —);
+3) con IANoDisponible: mensaje en rojo, línea «Las acciones sin IA siguen
+funcionando…» y salir con 4; 4) la tabla de ejecutar: columna Detalle si
+algún resultado la trae, y rutas con ~. Termina con: uv run tareas --help.
+
+**Qué corregí del plan:**
+los puntos 1-3 ya estaban (el 1 es del motor, motor.py:100, por diseño de
+ADR-0003; el 2 y el 3 se añadieron hoy: columna IA y _aviso_sin_ia). El 4
+era lo nuevo: columna Detalle condicional y rutas abreviadas con ~.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+la primera versión puso la ruta completa con ~ en las celdas Fichero y
+Destino: a 80 columnas Rich truncaba y el Detalle desaparecía (3 tests
+rojos). Deshecho: celdas con el nombre corto, y el ~ en las rutas que
+aparecen DENTRO del detalle y del pie («Todo dentro de: ~/...»).
+
+**Funcionaba a la primera:**
+no: dos tropiezos — la ruta completa en celdas (lo de arriba) y un
+SyntaxError por «C:\Users» en un docstring (\U = escape Unicode). Tras
+corregirlos, 147 tests en verde.
+
+**Qué aprendí:**
+«rutas con ~» no es dónde sea: en las columnas cortas no cabe y sobra;
+el ~ va donde la ruta larga estorba (detalle y pie). Y los docstrings
+también son código: \U en «C:\Users» rompe el fichero entero.
+
+### Prompt 12
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+«no quiero que funcione tareas, así es como se llama el del profe» +
+fragmentos de su cli.py (fallo(), comprobar-ia, inyección del proveedor
+en ejecutar): «revisalo».
+
+**Qué corregí del plan:**
+revisión comparada. Se ADOPTÓ su idea de fallo(): aquí un helper que une
+aviso-sin-IA + línea roja + código de salida, para que ningún «except
+TareasError» se olvide del aviso (antes iban pegados a mano, 4 sitios).
+El aviso ahora apunta a «cliWork acciones». Se MANTUVO lo nuestro: el
+prefijo «Error:» (no su «✘»), comprobar-ia con certificado y SISTEMA_
+PRUEBA (la suya es más corta), y la inyección del proveedor en motor.py
+con accion.proveedor (su cli.py usa motor.proveedor; el nuestro es el
+diseño de ADR-0003 y con getattr tolera tipos sin IA como estado-pc).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no adoptar el texto «tareas acciones»: el programa aquí es cliWork (el
+«tareas» es el nombre del programa del profe, y el usuario no lo quiere).
+
+**Funcionaba a la primera:**
+sí: helper + 4 puntos de captura cambiados; 147 tests en verde y 15
+acciones válidas sin tocar nada más.
+
+**Qué aprendí:**
+revisar código ajeno no es copiarlo: se toma la IDEA buena (un solo
+sitio que convierte excepción en salida limpia) y se deja fuera el
+detalle que no aplica (su nombre de programa, su punto de inyección).
+
 

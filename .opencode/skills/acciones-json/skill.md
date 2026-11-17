@@ -40,6 +40,10 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     lo que el sistema no exponga (p. ej. temperaturas en mucha placa Windows) sale como
     «no disponible» y el informe sigue. El motor la ejecuta sin ficheros (caso especial
     en `motor.py`) y el menú NO le pregunta carpeta. No es acción IA.
+    El informe se devuelve MULTILÍNEA (una medida por línea, «Componente: dato») y
+    `ejecutar` lo pinta como tabla Rich («Componente / Dato»); los «AVISO: ...» salen
+    destacados en amarillo. Las etiquetas de disco van SIN la barra final («Disco C»,
+    no «Disco C:\») para no pelear con el escapado de Rich en la tabla.
     Opcional: `avisos` (objeto con umbrales en %: `disco_pct`, `memoria_pct`, `cpu_pct`;
     enteros del 1 al 100, validados en `config.validar()`): si lo medido llega al
     umbral, el informe acaba con líneas «AVISO: ...» (el estado sigue siendo «hecho»,
