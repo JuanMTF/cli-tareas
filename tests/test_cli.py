@@ -975,3 +975,52 @@ def test_menu_no_pregunta_carpeta_a_estado_pc(tmp_path: Path) -> None:
     texto = _texto(resultado)
     assert "Carpeta de origen" not in texto  # no se pregunta carpeta
     assert "Estado del equipo" in texto  # y el informe se ejecuta (solo lectura)
+
+
+# --- Códigos de salida, de 0 a 4 (sesión 4) ----------------------------------
+#
+# La promesa de la CLI: cada tipo de problema tiene SU código de salida y
+# ningún mensaje da traceback. 0 = bien · 1 = error del motor (TareasError)
+# · 2 = mal uso de la CLI (lo corta typer/click) · 3 = ConfigError ·
+# 4 = IANoDisponible. Estas cinco pruebas usan las fixtures del conftest.
+
+
+def test_codigo_0_todo_va_bien(tmp_path: Path, runner, texto) -> None:
+    """El caso feliz: listar una carpeta que existe sale con 0."""
+    carpeta = tmp_path / "vacia"
+    carpeta.mkdir()
+    resultado = runner.invoke(app, ["listar", str(carpeta)])
+    assert resultado.exit_code == 0, texto(resultado)
+
+
+def test_codigo_1_accion_inexistente(runner, texto) -> None:
+    """TareasError del motor: la acción no está en el JSON → 1, sin traceback."""
+    resultado = runner.invoke(app, ["ejecutar", "no-existe"])
+    assert resultado.exit_code == 1, texto(resultado)
+    assert "Traceback" not in texto(resultado)
+
+
+def test_codigo_2_mal_uso_de_la_cli(runner) -> None:
+    """Opción desconocida: typer/click corta con 2 ANTES de llegar al motor."""
+    resultado = runner.invoke(app, ["--no-existe"])
+    assert resultado.exit_code == 2
+
+
+def test_codigo_3_json_roto(tmp_path: Path, runner, texto, escribir_config) -> None:
+    """ConfigError: el JSON no se puede leer → 3, con mensaje humano."""
+    roto = tmp_path / "roto.json"
+    roto.write_text("{esto no es json", encoding="utf-8")
+    resultado = runner.invoke(app, ["validar", str(roto)])
+    assert resultado.exit_code == 3, texto(resultado)
+    assert "Traceback" not in texto(resultado)
+
+
+def test_codigo_4_sin_config_de_ia(runner, texto, env_sin_ia) -> None:
+    """IANoDisponible: sin URL ni clave → 4, con el aviso de las acciones sin IA."""
+    resultado = runner.invoke(app, ["comprobar-ia"])
+    assert resultado.exit_code == 4, texto(resultado)
+    salida = texto(resultado)
+    assert "Faltan CENTRO_IA_URL" in salida
+    assert "las acciones sin IA siguen funcionando" in salida
+    assert "Traceback" not in salida
+    assert "SECRETA" not in salida  # no hay clave que enseñar, y se demuestra

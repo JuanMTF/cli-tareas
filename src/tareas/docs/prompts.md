@@ -1146,4 +1146,101 @@ responde cualquier cosa; y sin validación en el código, también. Las dos
 barreras juntas (instrucción + comparación en el código) son las que
 impiden que se invente ni una carpeta.
 
+## 17-11-2026 · Sesión 4: tests reorganizados, CI y versión 1.0.0
+
+### Prompt 15
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+reorganiza los tests de la semana 4: tests/conftest.py con las fixtures
+compartidas (CliRunner, JSON de acciones, dobles del proveedor IA y el
+entorno con/sin CENTRO_IA_*), test_config.py con 8 pruebas de validación,
+test_acciones.py con 6 de comportamiento de las clases, test_ia.py con 9
+SIN red (httpx simulado) y 5 de códigos de salida 0..4 en test_cli.py.
+
+**Qué corregí del plan:**
+tres pruebas mías empezaron mal y el propio pytest me lo dijo: supuse que
+cargar_acciones validaba el esquema de cada acción, pero ese es el
+contrato de validar_acciones/validar_ia (las que usa la orden validar),
+y max_caracteres fuera de rango no devuelve avisos: LEVANTA
+AccionNoValida. Reescritos a su nivel real; el resto, a la primera.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no migrar todos los usos de runner/_texto de test_cli.py a las fixtures:
+son ~40 funciones que funcionan; los tests NUEVOS usan las fixtures y los
+antiguos quedan como están (migración gradual, no reescribir por gusto).
+
+**Funcionaba a la primera:**
+no: los 3 tropiezos de arriba; corregidos, 156 tests en verde.
+
+**Qué aprendí:**
+cada función tiene su CONTRATO y el test se escribe contra el contrato,
+no contra la suposición (cargar ≠ validar; avisos ≠ excepción). Y la
+suite sin red se consigue con dobles en conftest: httpx.Response
+fabricado + monkeypatch de httpx.post, así CI no necesita ninguna clave.
+
+### La instalación comprobada de verdad (Prompt 16)
+
+**Prompt del plan (agente Build):**
+pyproject.toml a 1.0.0, CHANGELOG.md por semana, README con «instalar con
+una orden» (uv tool install), .github/workflows/pruebas.yml en los tres
+sistemas y scripts/revisar.sh que lanza opencode run en solo lectura.
+
+**Qué corregí del plan:**
+al probar la instalación descubrí que .env.example NO estaba en git: el
+.gitignore ignoraba también el example (línea «.env.example»), así que el
+criterio de la semana 3 estaba a medias. Quitado del .gitignore (con
+comentario de que la plantilla SIN claves sí se sube) y añadido al index.
+
+**Funcionaba a la primera:**
+sí: uvx --from . cliWork version → cliWork 1.0.0, con el paquete
+construido e instalado efímero (34 paquetes, numpy incluido por psutil).
+
+**Qué aprendí:**
+«documentado» no basta si git no sube el fichero: la prueba de un criterio
+es git log -- fichero. Y la versión no es cambiar un número: es la
+etiqueta, el CHANGELOG y la batería (que comprueba «version imprime
+1.0.0») diciendo lo mismo.
+
+## 17-11-2026 · Los 4 fallos del modo interactivo que no eran fallos
+
+### Prompt 17
+**Herramienta:** OpenCode (modelo DeepSeek V4.1 Flash Free)
+
+**Prompt del plan (agente Build):**
+pego la salida de la batería en modo interactivo: acaba con 4 «Marcado
+FALLO por el auditor» y hay que solucionarlos antes de seguir. Antes de
+tocar código, comprueba tú mismo si esos 4 fallos son reales o del propio
+test, y después documenta el arreglo en prompts.md y en un ADR.
+
+**Qué corregí del plan:**
+los 4 marcados eran exactamente los 4 pasos cuyo resultado BUENO es un
+error rojo (validar con JSON roto y con max_caracteres fuera de rango, y
+sus dos «no ensena traceback»). La CLI estaba bien: la batería completa
+dio 48/48 y -SoloSimular 23/23. El fallo era la pregunta «¿A la vista, ha
+salido OK?»: quien acaba de ver un «Error:» en rojo contesta «n» y se
+apunta un fallo inexistente. Añadido `-ErrorEsperado` a esos pasos (avisan
+de que el rojo es lo esperado), la pregunta pasa a «¿La salida es la
+esperada?» y el resumen final lista los pasos fallidos por su nombre.
+Documentado en ADR-0012.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no quitar la pregunta en los pasos de error esperado ni darlos por buenos
+sin preguntar: se perdería la revisión humana de que el mensaje rojo se
+lee bien. Tampoco separé contadores (pasos/fallos/auditor): más números
+para la misma información; con el nombre en el resumen basta.
+
+**Funcionaba a la primera:**
+no: mi primera hipótesis fue que los 4 fallos eran de código (modelo
+saturado, sandbox sucio); la batería no interactiva los descartó. La
+pista estaba en la propia salida pegada: los 4 «n» caían en los pasos del
+JSON roto.
+
+**Qué aprendí:**
+un veredicto humano mal formulado es un falso positivo del propio test:
+la pregunta tiene que decir qué es lo esperado, no solo «¿OK?». Y un
+resumen que solo cuenta fallos no sirve para arreglarlos: con el nombre
+del paso se localiza al instante (y cabe en el issue o en el ADR).
+
+
 

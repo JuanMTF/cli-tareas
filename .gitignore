@@ -7,7 +7,7 @@ __pycache__/
 dist/
 
 # Secretos: claves de API y configuración privada. NUNCA al repo.
+# (.env.example NO es un secreto: es la plantilla SIN claves, y se sube.)
 .env
-.env.example
 IAPasos.md
 testarealizarJuan.md

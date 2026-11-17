@@ -5,6 +5,21 @@ comprimir, renombrar, borrar, convertir PDF a HTML y limpiar huellas de USB.
 Las acciones viven en un JSON (`acciones.json`): añadir una acción = editar el
 JSON, nunca el código (ADR-0001).
 
+## Instalar con una orden
+
+Necesitas [uv](https://docs.astral.sh/uv/). Con el repositorio clonado,
+`uv tool install` deja el comando `cliWork` en el PATH (v1.0.0):
+
+```bash
+git clone https://github.com/JuanMTF/cli-tareas.git
+cd cli-tareas
+uv tool install .
+cliWork --help
+```
+
+Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
+desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
+
 ## Órdenes
 
 - `uv run cliWork --help` — ayuda con todos los comandos.
