@@ -12,10 +12,10 @@ con la etiqueta `v1.0.0`.
 
 - [x] paso-1 (pytest y la caja de arena: conftest.py) (17-11-2026)
 - [x] paso-2 (config y acciones: casos feos con parametrize) (17-11-2026)
-- [ ] paso-3 (la prueba que prueba: romper el código a propósito)
+- [x] paso-3 (la prueba que prueba: romper el código a propósito) (19-11-2026)
 - [x] paso-4 (la IA sin red: ProveedorFalso) (17-11-2026)
 - [x] paso-5 (la CLI desde fuera: CliRunner, códigos 0-4) (17-11-2026)
-- [ ] paso-6 (GitHub Actions en tres sistemas) — el workflow está creado pero SIN commitear
+- [ ] paso-6 (GitHub Actions en tres sistemas) — el workflow YA está commitear; falta push y Actions en verde
 - [x] paso-7 (opencode run: scripts/revisar.sh) (17-11-2026)
 - [ ] paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0)
 - [ ] paso-9 (instalación cruzada: la prueba de otra persona)
@@ -44,12 +44,20 @@ con la etiqueta `v1.0.0`.
 
 ### paso-3 (la prueba que prueba: romper el código a propósito)
 
-- [ ] Elegir una prueba que proteja algo que te importe (p. ej. `--simular` no toca el disco).
-- [ ] Romper el código a propósito (sacar el `mkdir` del `if` en `acciones.py`).
-- [ ] `uv run pytest` → alguna prueba en ROJO. Anotar cuál.
-- [ ] `git restore` → todo en verde otra vez.
-- [ ] Apuntar en Notas qué prueba se puso en rojo (no consta todavía: es el paso que
-      demuestra que las pruebas protegen de verdad).
+- [x] Elegir una prueba que protege algo que te importe (p. ej. `--simular` no toca el disco).
+- [x] Romper el código a propósito (19-11, a mano): en `Mover.preparar` se quitó el
+      `.mkdir` de la línea → quedó `self._destino_final(destino)(parents=True,
+      exist_ok=True)` → `TypeError: 'WindowsPath' object is not callable` (`acciones.py:390`).
+- [x] `uv run pytest` → **7 en ROJO** de 174: `test_menu_propone_la_carpeta_del_json`
+      (test_cli, `exit_code` 1 en vez de 0) y 6 de `test_usuario` (`tu_origen_manda`,
+      `tu_destino_manda`, `sin_nada_tuyo_manda`, `extensiones_entran_en_filtros`,
+      `la_opcion_de_la_cli_manda`, `extensiones_no_tochan`). La batería
+      (`pruebas/ejecutartareas.bat`) lo confirmó: 48 pasos, 4 fallos (pytest + los 3 de
+      `mover` real: primera vuelta, segunda vuelta y nombre repetido).
+- [x] Detalle a guardar: `--simular` siguió **VERDE** (el `if not simular` salta la
+      línea): esta línea la protegen las pruebas de movimiento real, no las de simulación.
+- [x] `git restore src/tareas/acciones.py` → **174 passed** otra vez (verificado 19-11).
+- [x] Apuntado en `docs/prompts.md` (Prompt 22).
 
 ### paso-4 (la IA sin red: ProveedorFalso)
 
@@ -73,7 +81,8 @@ con la etiqueta `v1.0.0`.
 
 - [x] `.github/workflows/pruebas.yml` creado: matriz `ubuntu-latest`, `macos-latest`,
   `windows-latest` con `fail-fast: false`, `checkout`, `setup-uv` (Python 3.12) y `uv run pytest`.
-- [ ] `git add .github/workflows/pruebas.yml` + commit (está SIN commitear: `?? .github/`).
+- [x] Commit de `.github/workflows/pruebas.yml` (ya está en el repo; verificado 19-11:
+      ya no aparece `?? .github/` en `git status`).
 - [ ] Push y abrir la pestaña **Actions**: las tres máquinas en verde.
 - [ ] Si algo se pone en rojo en Windows o macOS: leer el error y arreglar (las 6 reglas
       multiplataforma). Ese arreglo es uno de los mejores commits de la semana.
@@ -89,9 +98,11 @@ con la etiqueta `v1.0.0`.
 
 ### paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0)
 
-Estado verificado 19-11: `CHANGELOG.md` ya tiene las entradas `[1.0.0]` y `[1.1.0]`,
-pero **no hay ninguna etiqueta git** (`git tag` vacío), no existe la rama `release-1.0`
-ni PR, y hay muchos ficheros modificados sin commitear en la rama `Sesion-4`.
+Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
+`[1.0.0]` y `[1.1.0]`, y el repo está casi todo commiteado (último commit:
+«guardado antes de paso 3»); solo quedan sin commitear los docs de hoy
+(`SESION-04.md`, `prompts.md`). Pero **no hay ninguna etiqueta git**
+(`git tag` vacío), no existe la rama `release-1.0` ni PR.
 
 - [ ] Commits pequeños en `main`/`Sesion-4`, uno por pieza (ver lista abajo).
 - [ ] `git switch -c release-1.0` con CHANGELOG, README y versión.
@@ -134,7 +145,7 @@ ni PR, y hay muchos ficheros modificados sin commitear en la rama `Sesion-4`.
 - [ ] En carpetas temporales, nunca sobre ficheros reales. *(hecho: fixture `aislado`)*
 - [ ] Ejecutadas en **GitHub Actions** en los 3 sistemas. *(falta paso-6)*
 - [ ] **Auditadas por ti**: sabes explicar cada `assert` y qué cambio lo pondría en rojo.
-      *(falta paso-3 y repasar los asserts antes de la entrega)*
+      *(paso-3 hecho 19-11: mutación de `Mover.preparar` → 7 en rojo; falta repasar los asserts)*
 
 **Instalación, documentación y proceso · 10 · Excelente (100 %) exige:**
 
@@ -184,16 +195,20 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   completo (aislado autouse, descargas, escribir_config, ProveedorFalso),
   `test_config`, `test_acciones`, `test_ia`, `test_acciones_ia`, `test_cli`
   (códigos 0-4) y `scripts/revisar.sh`.
-- (19-nov) Pendiente grave para la entrega: `.github/workflows/pruebas.yml` existe
-  pero NO está commiteado (`?? .github/`), **no hay ninguna etiqueta git**, no existe
-  la rama `release-1.0` ni PR, y la versión en `pyproject.toml` ya es `1.1.0` mientras
-  la rúbrica pide `v1.0.0`: hay que decidir cómo se cuadra antes del viernes 20.
+- (19-nov) Release, estado real tras el paso 3: `.github/workflows/pruebas.yml` YA está
+  commiteado (en `412d812`, que aún **no está push** → Actions no ha corrido); **no hay
+  ninguna etiqueta git** (`git tag` vacío), no existe la rama `release-1.0` ni PR, y la
+  versión en `pyproject.toml` ya es `1.1.0` mientras la rúbrica pide `v1.0.0`: decidir
+  cómo se cuadra antes del viernes 20.
 - (19-nov) README: la instalación es `uv tool install .` (local); para el criterio
   «Excelente» hace falta la orden `uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0`.
-- (19-nov) Paso-3 (mutación a propósito) no consta en `docs/prompts.md`: es el hueco
-  de contenido más importante, porque es lo que demuestra que las pruebas protegen.
-- (19-nov) Hay 14 ficheros modificados y 5 sin rastrear en la rama `Sesion-4`:
-  pasarlos por el revisor (`scripts/revisar.sh`) y commitear en trozos pequeños.
+- (19-nov) Paso-3 HECHO y documentado (Prompt 22 en `docs/prompts.md`): mutación de
+  `Mover.preparar` → **7 tests en rojo** de 174 (más 4 pasos de la batería); `--simular`
+  siguió verde porque el guard salta la línea. Restaurado con `git restore` → 174 passed.
+  Es lo que más pesa en «auditadas por ti» de la rúbrica.
+- (19-nov) Repo casi limpio tras el paso 3: solo `SESION-04.md` y `prompts.md` están
+  modificados (los docs de hoy); el resto ya está commiteado hasta «guardado antes de
+  paso 3» (rama `ahead 1`: falta push). Pasar los docs por el revisor y commitear.
 - (19-nov) Prompt 21 + ADR-0015: auditoría del `escribir_config` del profe (no se
   sustituye: doble envoltura con dicts y `ensure_ascii` rompería/desvirtuaría 4
   tests) y de la tabla «fixtures y quién las pide» (describe la suite del profe, no

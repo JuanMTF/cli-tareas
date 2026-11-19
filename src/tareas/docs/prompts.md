@@ -1466,5 +1466,66 @@ que además era un hueco de la rúbrica) o la quitas. Añadido: un test
 que pide una fixture y no la llama es ruido que hay que limpiar en la
 misma pasada.
 
+## 19-11-2026 · Paso 3 a mano: romper Mover.preparar y verlo en rojo
+
+### Prompt 22
+**Herramienta:** el usuario a mano (mutación y restauración) + GLM-5.3-Flash
+Free OpenCode solo para recoger el informe
+
+**Prompt (paso 3 de la sesión 4, hecho sin agente):**
+«rompe en `src/tareas/acciones.py`, en la clase Mover, quítale el mkdir y
+pasa el test: tiene que salir en rojo» (consigna del profesor). El alumno
+hace la mutación a mano, mira el rojo y luego restaura con `git restore`.
+
+**Qué corregí del plan:**
+no hay plan de agente que corregir: la mutación ES el paso. Sí conviene
+anotar la forma exacta que tomó: se quitó el `.mkdir` de la línea y no la
+línea entera, así que quedó `self._destino_final(destino)(parents=True,
+exist_ok=True)` y el fallo salió como `TypeError: 'WindowsPath' object is
+not callable` (`acciones.py:390`) en vez de una carpeta destino que no se
+crea. Para el objetivo del paso da igual (la línea está protegida y el
+rojo se ve); de hecho el TypeError es imposible de no ver.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+el único diff era la mutación (una línea) y se deshizo enseguida con
+`git restore src/tareas/acciones.py` (lo hizo el usuario): el commit
+previo se llamaba literalmente «guardado antes de paso 3», así que
+restaurar solo quitó el rojo. Regla aplicada en vivo: nunca se commitea
+con el código roto.
+
+**Funcionaba a la primera:**
+sí: el rojo salió a la primera. **7 tests en rojo** de 174:
+- `test_cli.py::test_menu_propone_la_carpeta_del_json` (falla por
+  `exit_code` 1 en vez de 0: la excepción llega hasta el CLI);
+- `test_usuario.py`: `test_tu_origen_manda_sobre_el_del_json`,
+  `test_tu_destino_manda_sobre_el_del_json`, `test_sin_nada_tuyo_manda_el_json`,
+  `test_tus_extensiones_entran_en_filtros_sin_extensiones`,
+  `test_la_opcion_de_la_cli_manda_sobre_todo`,
+  `test_tus_extensiones_no_tochan_los_filtros_que_traen_las_suyas`.
+La batería (`pruebas/ejecutartareas.bat`, opción 1) lo confirmó por su
+cuenta: **48 pasos, 4 fallos** — el paso de pytest y los 3 de `mover`
+real (primera vuelta, segunda vuelta y nombre repetido). Tras restaurar:
+174 passed otra vez.
+
+**Qué aprendí:**
+- La mutación solo se coló en el lado REAL: `--simular` siguió en verde
+  porque el `if not simular` salta la línea. O sea: esta línea la
+  protegen las pruebas de movimiento real (las 7 de arriba), no las de
+  simulación; si algún día se borra `preparar()` entero, el verde de
+  `--simular` no avisa de nada.
+- La batería lo vivió igual: el paso «mover --simular NO mueve nada (ni
+  mkdir)» siguió en OK con el código roto mientras los 3 de mover real
+  se caían. Verde en una ejecución roja no es garantía de nada: hay que
+  mirar QUÉ cubre cada prueba.
+- 167 pruebas siguieron verdes: la mayoría de la suite es ortogonal a
+  esa línea. El rojo es un mapa de protección: te dice exactamente qué
+  tests cuidan una línea concreta (aquí, 7 de 174).
+- Un `TypeError` en `preparar` no se convierte en mensaje humano (en la
+  CLI real sería un traceback): otra razón para que esa línea tenga sus
+  pruebas, y para no inventar errores fuera de `TareasError`.
+- Comprobado en vivo el orden del método: romper → ver rojo → anotar →
+  restaurar → verificar verde. Sin el commit previo, `git restore`
+  habría sido arriesgado (se habrían borrado los cambios sin commitear).
+
 
 
