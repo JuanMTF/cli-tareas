@@ -207,6 +207,41 @@ def test_clasificar_simular_no_llama_al_modelo(tmp_path: Path) -> None:
     assert fichero.exists()  # con --simular no se mueve nada
 
 
+# --- resumir: camino feliz ----------------------------------------------------
+
+
+def test_resumir_escribe_el_resumen(tmp_path: Path, modelo_falso) -> None:
+    """Camino feliz de resumir: el .resumen.md se escribe con la respuesta.
+
+    Usa el ProveedorFalso del conftest (sin red ni tokens): el modelo
+    contesta lo programado y se puede afirmar contra lo que se le preguntó.
+    """
+    fichero = _fichero(tmp_path, "tema-1.txt")
+    accion = Resumir(_config_resumir())
+    resultado = _ejecutar(accion, fichero, modelo_falso)
+    assert resultado.estado == "hecho"
+    salida = tmp_path / "tema-1.resumen.md"
+    assert salida.exists()
+    texto = salida.read_text(encoding="utf-8")
+    assert "respuesta del modelo falso" in texto  # lo que contestó el doble
+    assert f"# Resumen de {fichero.name}" in texto  # cabecera con el original
+    # la pregunta lleva el documento entre <documento> y </documento>
+    assert "<documento>" in modelo_falso.llamadas[0][1]
+    assert "contenido de prueba" in modelo_falso.llamadas[0][1]
+
+
+def test_resumir_simular_no_pregunta_al_modelo(
+    tmp_path: Path, proveedor_que_rompe
+) -> None:
+    """--simular cuenta caracteres sin gastar: el modelo no recibe nada."""
+    fichero = _fichero(tmp_path, "tema-1.txt")
+    accion = Resumir(_config_resumir())
+    accion.proveedor = proveedor_que_rompe  # si lo llamara, revienta
+    resultado = accion.ejecutar([fichero], True)[0]
+    assert resultado.estado == "simulado"
+    assert not list(tmp_path.glob("*.resumen.md"))  # nada escrito
+
+
 # --- fichero sin texto (PDF escaneado o vacío) --------------------------------
 
 

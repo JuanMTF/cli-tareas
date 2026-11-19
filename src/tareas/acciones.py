@@ -23,6 +23,7 @@ from typing import Any, Callable, Literal
 
 from tareas import config as mod_config
 from tareas import html as mod_html
+from tareas import usuario as mod_usuario
 from tareas.errores import ConfigError, TareasError
 from tareas.ia import ProveedorIA
 
@@ -238,8 +239,14 @@ class Accion(ABC):
         raise NotImplementedError
 
     def _destino(self) -> Path:
-        """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino)."""
-        return Path(self.config.get("destino") or ".").expanduser()
+        """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino).
+
+        Prioridad (ADR-0014): TU configUsuario.json manda sobre la del JSON
+        (mismo repo, rutas distintas por ordenador); la opción de la CLI
+        sigue encima de ambas vía _destino_final().
+        """
+        destino = mod_usuario.destino_defecto() or self.config.get("destino")
+        return Path(destino or ".").expanduser()
 
     def _origen(self) -> Path:
         """Carpeta origen expandiendo ~."""

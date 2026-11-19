@@ -41,7 +41,8 @@ def test_el_tipo_pasa_la_validacion(tmp_path: Path) -> None:
 
 
 def test_esta_registrado_en_el_json_real() -> None:
-    acciones = cargar_acciones(Path("src/tareas/docs/acciones.json"))
+    # Ruta absoluta del JSON empaquetado: no depende del cwd del test.
+    acciones = cargar_acciones(mod_config.RUTA_ACCIONES)
     assert any(accion.get("tipo") == "estado-pc" for accion in acciones)
 
 

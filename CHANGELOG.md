@@ -4,6 +4,29 @@ Formato de [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 versionado SemVer. La versión vive en `pyproject.toml` y la imprime
 `cliWork version`.
 
+## [1.1.0] - 2026-11-17
+
+Opciones por defecto por ordenador: el mismo repo y el mismo `acciones.json`
+sirven en varios equipos (rutas de red distintas por PC, Linux…) con un
+fichero de usuario que se crea solo en `~/.cliWork/configUsuario.json`
+(ADR-0014). Suite: 172 pruebas.
+
+### Añadido
+
+- `~/.cliWork/configUsuario.json`: tus opciones por defecto (`origen`,
+  `destino`, `extensiones`, `confirmar`), creado al primer uso con una
+  `_ayuda` en español dentro del fichero. Lo vacío no cambia nada: manda
+  `acciones.json`. Si está roto, avisa con fichero/línea/columna y sale 3.
+- Prioridad de origen y destino: opción de la CLI > TU fichero > el JSON >
+  «.» (menú, `mover`, `copiar`, `comprimir`, `renombrar`, `borrar`,
+  `transformar`).
+- Opción `--extensiones/-x` en `ejecutar` (comas o espacios, el punto se
+  añade solo): manda sobre el JSON y sobre tu fichero; las extensiones
+  por defecto del usuario solo entran en filtros que no traigan las suyas.
+- Confirmaciones: tu `confirmar: false` apaga las preguntas de las acciones
+  con «confirmar»; las de tipo `borrar` preguntan SIEMPRE con aviso
+  «⚠ ATENCIÓN» (no hay papelera).
+
 ## [1.0.0] - 2026-11-17
 
 Primera versión «para quien la usa»: se instala con una orden

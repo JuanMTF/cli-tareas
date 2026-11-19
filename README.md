@@ -8,7 +8,7 @@ JSON, nunca el código (ADR-0001).
 ## Instalar con una orden
 
 Necesitas [uv](https://docs.astral.sh/uv/). Con el repositorio clonado,
-`uv tool install` deja el comando `cliWork` en el PATH (v1.0.0):
+`uv tool install .` deja el comando `cliWork` en el PATH (v1.1.0):
 
 ```bash
 git clone https://github.com/JuanMTF/cli-tareas.git
@@ -32,10 +32,11 @@ desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
   si algo pasa los umbrales del JSON (`avisos`: disco/memoria/CPU en %).
   Solo lectura.
 - `uv run cliWork --menu` — menú con números para lanzar acciones sin teclear
-  órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones). La
-  carpeta que propone por defecto es la «origen» del JSON (si la acción no
-  tiene, la escribes). Lo mismo con la orden `uv run cliWork menu`; para
-  simular u otras opciones, `ejecutar`.
+  órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones); al
+  acabar vuelve al menú solo (solo `0` o Ctrl+C salen). La carpeta que
+  propone por defecto es tu `configUsuario.json` y, si no, la «origen» del
+  JSON (en ese prompt solo va la RUTA: para opciones como `--destino` o
+  `--extensiones`, usa `ejecutar`). Lo mismo con la orden `uv run cliWork menu`.
 - `uv run cliWork ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] ...` — ejecuta.
 - `uv run cliWork comprobar-ia` — comprueba la conexión con el servidor de IA.
 - `uv run cliWork indexar CARPETA` — convierte solo los PDF que falten.
@@ -52,6 +53,61 @@ uv run cliWork --config C:\ruta\mis-acciones.json ejecutar ordenar-descargas --s
 ```
 
 (`--config` va justo después de `cliWork`, antes del comando.)
+
+## Tus opciones por defecto: `configUsuario.json`
+
+Cada ordenador (y cada usuario) puede tener **sus propias opciones por
+defecto** en un fichero que vive en tu carpeta personal:
+`~/.cliWork/configUsuario.json` (en Windows,
+`C:\Users\TuUsuario\.cliWork\configUsuario.json`).
+
+**No hay que crearlo**: se crea solo la primera vez que ejecutas una acción,
+con todos los valores vacíos («no cambiar nada») y una `_ayuda` dentro que
+explica cada campo en español. Si lo borras, vuelve a nacer igual.
+
+Lo pensado para el caso de **varios ordenadores**: el mismo repo y el mismo
+`acciones.json` sirven en los 3 equipos; solo cambia el fichero de usuario de
+cada uno (una ruta de red por PC, o rutas de Linux si lo usas en Ubuntu).
+Lo que **no** pongas no cambia nada: manda lo que diga `acciones.json`.
+
+| Campo | Qué hace | Vacío (`""` o `[]`) significa |
+|---|---|---|
+| `origen` | Tu carpeta de origen por defecto para las acciones que no traigan una, y la que propone el menú | Manda la del JSON |
+| `destino` | Tu carpeta de destino por defecto: manda sobre la del JSON | Manda la del JSON |
+| `extensiones` | Extensiones por defecto (ej.: `[".pdf", ".jpg"]`) para los filtros que **no** traigan las suyas | Todas, como hasta ahora |
+| `confirmar` | `true` = las acciones con «confirmar» piden autorización; `false` = dejan de preguntar | `true` |
+
+**Prioridad** (quién manda, de más a menos):
+
+1. Lo que escribes en la orden: `--carpeta`, `--destino`, `--extensiones`.
+2. **Tu `configUsuario.json`** (si el campo va relleno).
+3. Lo que dice `acciones.json`.
+4. Los valores de fábrica.
+
+**Ejemplo de fichero** (en un PC concreto, con la ruta de red de esa casa):
+
+```json
+{
+  "_ayuda": "(explicación de cada campo, en español, dentro del fichero)",
+  "origen": "//SERVIDOR/Compartido/Descargas",
+  "destino": "",
+  "extensiones": [],
+  "confirmar": true
+}
+```
+
+**Para un día concreto** («tengo muchos PDF y solo quiero esos»), no edites el
+fichero: usa la opción en la orden, que manda sobre todo:
+
+```powershell
+uv run cliWork ejecutar comprimir-antiguos --extensiones .pdf --simular
+```
+
+⚠ **Las acciones de tipo `borrar` preguntan SIEMPRE**, con su aviso
+«ATENCIÓN», aunque pongas `confirmar: false`: borran de verdad y no hay
+papelera. Si tu fichero tiene una errata (una coma de más, un campo mal
+escrito), `cliWork` avisa con el fichero, la línea y la columna y no ejecuta
+nada. (ADR-0014.)
 
 ## Manuales en HTML con plantillas (tipo «transformar»)
 

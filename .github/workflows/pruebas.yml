@@ -1,0 +1,29 @@
+# Pruebas de cliWork en los tres sistemas de escritorio (sesión 4).
+# No hace falta red ni .env en el runner: los tests de IA usan dobles
+# (tests/conftest.py) y las fixtures simulan el entorno.
+name: pruebas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    strategy:
+      fail-fast: false  # si falla en un SO, queremos ver los otros igual
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instala uv (con Python 3.12)
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sincroniza dependencias (uv sync)
+        run: uv sync
+
+      - name: Ejecuta la suite (uv run pytest)
+        run: uv run pytest -q

@@ -10,6 +10,8 @@ variables CENTRO_IA_*) se simula con monkeypatch.
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -84,15 +86,26 @@ def accion_abrir() -> dict[str, Any]:
 
 @pytest.fixture
 def escribir_config(tmp_path: Path) -> Callable[..., Path]:
-    """Escribe un acciones.json con lo que le pases y devuelve su ruta.
+    """Escribe un acciones.json a medida y devuelve su ruta.
 
-    Con ensure_ascii=False y UTF-8: las tildes del JSON son parte de la
-    prueba (el fichero real de acciones va en español).
+    Acepta lo mismo que el del profe: una LISTA de acciones (se envuelve
+    en {"version": 1, "acciones": [...]}), un TEXTO tal cual (para los
+    JSON rotos: lo que le pases sale tal cual en el fichero) o un dict
+    completo (se serializa como venga). Con ensure_ascii=False y UTF-8:
+    las tildes del JSON son parte de la prueba.
     """
 
-    def _escribir(datos: Any, nombre: str = "acciones.json") -> Path:
+    def _escribir(acciones: Any, nombre: str = "acciones.json") -> Path:
         ruta = tmp_path / nombre
-        ruta.write_text(json.dumps(datos, ensure_ascii=False), encoding="utf-8")
+        if isinstance(acciones, str):
+            texto = acciones
+        elif isinstance(acciones, list):
+            texto = json.dumps(
+                {"version": 1, "acciones": acciones}, ensure_ascii=False
+            )
+        else:
+            texto = json.dumps(acciones, ensure_ascii=False)
+        ruta.write_text(texto, encoding="utf-8")
         return ruta
 
     return _escribir
@@ -132,3 +145,83 @@ def env_con_ia(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CENTRO_IA_KEY", "SECRETA-AUDITORIA-NO-IMPRIMIR")
     monkeypatch.setenv("CENTRO_IA_MODELO", "modelo-de-prueba")
     monkeypatch.setenv("CENTRO_IA_CA", "")
+
+
+@pytest.fixture(autouse=True)
+def aislado(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Ningún test toca carpetas de verdad ni al servidor de IA.
+
+    Para TODO test, sin que tenga que pedirlo:
+    - el directorio actual es un tmp_path de pytest (el .env real del repo
+      deja de ser visible: find_dotenv(usecwd=True) no lo encuentra);
+    - HOME y USERPROFILE apuntan al tmp_path: cualquier expanduser() de
+      «~» (motor, destinos del JSON) cae en el sandbox, no en el usuario;
+    - las variables del centro IA se quitan: sin config no hay forma de
+      construir el proveedor, y ProveedorCentro sale con IANoDisponible
+      antes de intentar ninguna conexión.
+
+    Se define ANTES de env_con_ia/env_sin_ia: los autouse se montan
+    primero, así que esos fixtures pueden volver a poner variables.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    for var in ("CENTRO_IA_URL", "CENTRO_IA_KEY", "CENTRO_IA_CA"):
+        monkeypatch.delenv(var, raising=False)
+
+
+DIAS_VIEJO = 40
+SEGUNDOS_POR_DIA = 86400
+
+
+@pytest.fixture
+def descargas(tmp_path: Path) -> Path:
+    """Una carpeta «Descargas» del sandbox con los casos típicos.
+
+    factura.pdf y «apuntes de redes.docx» son los documentos del filtro;
+    FOTO1.JPG prueba que la comparación de extensiones no distingue
+    mayúsculas; «cumpleaños 2.png», que un espacio en el nombre no rompe
+    nada; y viejo.tmp, el .tmp más antiguo que el filtro de 30 días
+    (se le fuerza el mtime con os.utime: los ficheros nuevos tienen
+    mtime de ahora, que no es «antiguo» para ningún test).
+    """
+    carpeta = tmp_path / "Descargas"
+    carpeta.mkdir()
+    for nombre in ("factura.pdf", "apuntes de redes.docx", "FOTO1.JPG",
+                   "cumpleaños 2.png", "viejo.tmp"):
+        (carpeta / nombre).write_text(f"contenido de {nombre}", encoding="utf-8")
+    viejo = carpeta / "viejo.tmp"
+    os.utime(viejo, (time.time() - DIAS_VIEJO * SEGUNDOS_POR_DIA,) * 2)
+    return carpeta
+
+
+class ProveedorFalso(ProveedorIA):
+    """Proveedor de pruebas que GRABA lo que le preguntan y contesta lo suyo.
+
+    Sin red, sin .env y sin httpx: el test le pone las respuestas que el
+    modelo contestaría (la última vale para el resto) y puede afirmar
+    contra self.llamadas qué sistema/usuario/max_tokens recibió (p. ej.
+    que el documento va entre <documento> y </documento>).
+    """
+
+    def __init__(self, texto: str = "respuesta del modelo falso") -> None:
+        self.texto = texto
+        self.segundos = 0.1
+        self.tokens_entrada = 12
+        self.tokens_salida = 3
+        # (sistema, usuario, max_tokens) de cada llamada, en orden.
+        self.llamadas: list[tuple[str, str, int]] = []
+
+    def completar(
+        self, sistema: str, usuario: str, max_tokens: int = 800
+    ) -> Respuesta:
+        self.llamadas.append((sistema, usuario, max_tokens))
+        return Respuesta(
+            self.texto, self.tokens_entrada, self.tokens_salida, self.segundos
+        )
+
+
+@pytest.fixture
+def modelo_falso() -> ProveedorFalso:
+    """Un ProveedorFalso nuevo por test (sus llamadas no se comparten)."""
+    return ProveedorFalso()

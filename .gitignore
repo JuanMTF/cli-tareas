@@ -11,3 +11,6 @@ dist/
 .env
 IAPasos.md
 testarealizarJuan.md
+
+# Temporal de pytest (--basetemp en pyproject.toml): se vacía en cada sesión.
+.pytest-tmp/

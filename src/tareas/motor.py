@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from tareas.acciones import Accion, NAVEGADORES, Resultado
+from tareas import usuario
 from tareas.errores import TareasError
 from tareas.ia import ProveedorCentro
 
@@ -68,6 +69,7 @@ class Motor:
         antiguedad: int | None = None,
         destino: Path | None = None,
         nombre_zip: str | None = None,
+        extensiones: list[str] | None = None,
     ) -> list[Resultado]:
         """Ejecuta una acción y devuelve la lista de resultados.
 
@@ -76,6 +78,8 @@ class Motor:
 
         ``nombre_zip`` (opción --nombre) lo usa el tipo «comprimir» para el
         .zip y el tipo «renombrar» como nombre genérico ({base} de la plantilla).
+        ``extensiones`` (opción --extensiones) manda sobre el filtro del JSON
+        y sobre las de configUsuario.json (ADR-0014).
         """
         accion = self.acciones.get(nombre)
         if accion is None:
@@ -143,7 +147,13 @@ class Motor:
             return accion.ejecutar([], simular, urls, abrir, destino)
 
         # Acciones sobre ficheros: mover, renombrar, borrar, transformar, comprimir.
-        carpeta_ejecucion = (carpeta or Path(accion.config.get("origen") or ".")).expanduser()
+        # Prioridad del origen (ADR-0014): la opción --carpeta de la CLI manda;
+        # sin ella, TU configUsuario.json (mismo repo, rutas por ordenador);
+        # sin nada tuyo, la «origen» del JSON; y sin ninguna, la carpeta actual.
+        origen = (
+            usuario.origen_defecto() or accion.config.get("origen") or "."
+        )
+        carpeta_ejecucion = Path(carpeta or origen).expanduser()
         if not carpeta_ejecucion.is_dir():
             raise TareasError(
                 f"La carpeta {carpeta_ejecucion} no existe. "
@@ -151,6 +161,16 @@ class Motor:
             )
 
         filtro = dict(accion.config.get("filtro") or {})
+        if extensiones:
+            # La opción --extensiones de la CLI manda sobre el JSON y lo tuyo:
+            # «otro día tengo muchos pdf y solo quiero esos».
+            filtro["extensiones"] = extensiones
+        elif "extensiones" not in filtro:
+            # Sin extensión ni en el JSON ni en la CLI: entran TUS extensiones
+            # por defecto, si pusiste alguna (lista vacía = como siempre).
+            por_defecto = usuario.extensiones_defecto()
+            if por_defecto:
+                filtro["extensiones"] = por_defecto
         if antiguedad is not None:
             # La opción de la CLI manda sobre el valor del fichero («mas_antiguo_que_dias»).
             filtro["mas_antiguo_que_dias"] = antiguedad

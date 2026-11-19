@@ -10,10 +10,13 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from tareas import acciones as mod_acciones
+from tareas import config as mod_config
 from tareas.cli import app
 
 runner = CliRunner()
-RUTA_REAL = Path("src/tareas/docs/acciones.json")
+# Ruta absoluta del JSON empaquetado (anclada al paquete): los tests no
+# dependen del cwd (el aislado de conftest lo mueve al tmp_path).
+RUTA_REAL = mod_config.RUTA_ACCIONES
 
 
 def _texto(resultado) -> str:
@@ -1006,7 +1009,7 @@ def test_codigo_2_mal_uso_de_la_cli(runner) -> None:
     assert resultado.exit_code == 2
 
 
-def test_codigo_3_json_roto(tmp_path: Path, runner, texto, escribir_config) -> None:
+def test_codigo_3_json_roto(tmp_path: Path, runner, texto) -> None:
     """ConfigError: el JSON no se puede leer → 3, con mensaje humano."""
     roto = tmp_path / "roto.json"
     roto.write_text("{esto no es json", encoding="utf-8")

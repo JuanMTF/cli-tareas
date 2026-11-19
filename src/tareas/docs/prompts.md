@@ -1243,4 +1243,228 @@ resumen que solo cuenta fallos no sirve para arreglarlos: con el nombre
 del paso se localiza al instante (y cabe en el issue o en el ADR).
 
 
+## 17-11-2026 · Andamiaje de los tests: aislamiento total del equipo real
+
+### Prompt 18
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+Hazlo según el plan, empezando solo por el andamiaje:
+- uv add --dev pytest
+- tests/conftest.py con:
+  · aislado (autouse): monkeypatch.chdir(tmp_path), HOME y USERPROFILE a
+    tmp_path y fuera CENTRO_IA_URL, CENTRO_IA_KEY y CENTRO_IA_CA;
+  · descargas: tmp_path/Descargas con factura.pdf, «apuntes de
+    redes.docx», FOTO1.JPG, «cumpleaños 2.png» y viejo.tmp con 40 días
+    (os.utime);
+  · escribir_config: escribe un acciones.json y devuelve su ruta;
+  · ProveedorFalso(ProveedorIA) y la fixture modelo_falso.
+Termina con: uv run pytest, luego rellena prompts.md y adr siguiendo la
+plantilla.
+
+**Qué corregí del plan:**
+el andamiaje existía a medias: pytest ya estaba en el grupo dev
+(uv add --dev pytest solo sincronizó la .venv) y el conftest ya traía
+escribir_config, los proveedores dobles y env_con_ia/env_sin_ia de la
+sesión 4. Añadí lo que faltaba: aislado (autouse), descargas y
+ProveedorFalso/modelo_falso, sin borrar las fixtures que ya usan los 9
+ficheros de test. Dos tropiezos reales que el andamiaje destapó:
+(1) el aislado rompió 5 tests que leían el JSON empaquetado con ruta
+RELATIVA («src/tareas/docs/acciones.json») — cambiados a
+config.RUTA_ACCIONES, que es absoluta porque se ancla a __file__; y
+(2) pytest se caía AL FINAL (con los 156 tests en verde) limpiando
+el árbol numerado de Windows: el enlace «pytest-current» de
+%TEMP%\pytest-of-juant queda con ACLs podadas y cleanup_dead_symlinks
+revienta con PermissionError; solucionado con --basetemp=.pytest-tmp en
+pyproject (sin directorios numerados ni enlace; el directorio se vacía
+al empezar cada sesión y va al .gitignore).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no reescribí el conftest desde cero: las fixtures existentes tienen
+~40 funciones de test encima y funcionan (migración gradual, como el
+Prompt 15). Tampoco intenté reparar las ACLs del pytest-of-juant
+borrando %TEMP%: no es borrable sin admin y el basetemp lo esquiva
+de raíz.
+
+**Funcionaba a la primera:**
+no: primera pasada 151/156 (los 5 de la ruta relativa) y el crash de
+limpieza; tras RUTA_ACCIONES + basetemp, 156 passed en 11 s, código 0.
+
+**Qué aprendí:**
+una fixture autouse que cambia el cwd es una promesa que hay que
+cumplir en TODA la suite: cualquier ruta relativa que quede es una
+bomba (y la encontró al momento). Y que la ruta de un recurso
+empaquetado se deriva SIEMPRE del módulo (RUTA_ACCIONES), nunca del
+directorio actual: es el mismo motivo por el que la CLI admite ~ y
+carpetas con espacios. El error de pytest que no mira los tests
+(un crash en el teardown) se distingue porque los verdes ya están
+contados: si los 156 pasan y aun así sale código 1, el fallo es del
+herraje, no del código.
+
+### Prompt 19
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+TE paso el conftest del profe (semana 4: la fixture aislado como «la
+pared», descargas con los ficheros feos y escribir_config a medida)
+revisalo y comprueba que el nuestro está ok.
+
+**Qué corregí del plan:**
+auditoría comparada. aislado: idéntico al del profe (chdir, HOME,
+USERPROFILE y fuera CENTRO_IA_URL/KEY/CA con raising=False) — nada que
+cambiar. descargas: equivalente (mismos 5 ficheros feos y os.utime a 40
+días). escribir_config: NO cumplía el contrato del profe — la nuestra
+hacía json.dumps de lo que sea, así que un string «roto» se convertía
+en JSON válido (un string entrecomillado) y no valía para probar JSON
+rotos. Adoptado el suyo: LISTA → envuelve en {"version": 1, "acciones":
+[...]}, TEXTO → tal cual; se mantuvo el dict completo tal cual (los 4
+usos actuales de test_config.py pasan dicts) y el ensure_ascii=False
+(las tildes son parte de la prueba).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no copiar su escribir_config tal cual sin más: habría roto los 4 tests
+existentes (pasan un dict completo y el suyo lo envolvería como si
+fuera la lista de acciones). Se adoptó el contrato (str/list) sin
+romper el actual (dict).
+
+**Funcionaba a la primera:**
+sí: 156 tests en verde tras el cambio, sin tocar ningún test.
+
+**Qué aprendí:**
+una fixture de «fábrica» se define por su CONTRATO (qué acepta), no por
+su implementación: el profe la pensó para JSON rotos (texto tal cual) y
+yo para dicts completos; la buena acepta los dos. Y «json.dumps de lo
+que sea» es una trampa: un string pasa a ser JSON válido y la prueba
+del error desaparece sin darte cuenta.
+
+### Prompt 20
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+para configurar las opciones por defecto de cada usuario he pensado que
+cuando se instale todo se cree también configUsuario.json y ahí salgan
+las opciones que se puedan cambiar como origen, destino, si pide
+autorización (con exclamación de atención en los comandos de borrar) y
+las extensiones. También explícalo bien en readme.md y actualiza los
+prompts y el ADR. (Respuestas de diseño: manda lo que el usuario
+DEFINA —si no, acciones.json, porque tiene 3 ordenadores con rutas de
+red distintas y Linux—; extensiones aplicadas a los filtros sin las
+suyas pero modificables por orden para el día puntual; fichero en
+~/.cliWork creado al primer uso.)
+
+**Qué corregí del plan:**
+módulo nuevo src/tareas/usuario.py: ruta() calculada EN LA LLAMADA
+(Path.home(), no al importar) para que el sandbox aislado siga
+valiendo; preparar() crea el fichero con valores VACÍOS y _ayuda en
+español dentro; cargar() valida (campos desconocidos, tipos) y sale
+con ConfigError (código 3) si está roto, reutilizando _mensaje_json de
+config.py. Prioridades en motor.ejecutar (origen: --carpeta > tu
+fichero > JSON > «.») y Accion._destino (tu fichero > JSON; la CLI
+sigue encima por _destino_final). Nueva opción --extensiones/-x
+(normalizar_extensiones: comas/espacios, punto se añade solo; inyectada
+SOLO en filtros sin «extensiones»). Confirmaciones en cli.py:
+pedir_confirmacion = usuario.confirmar_por_defecto(); borrar SIEMPRE
+pregunta tras imprimir «⚠ ATENCIÓN». Menú: defecto = tu origen primero.
+16 tests nuevos en tests/test_usuario.py (escritos sobre aislado,
+descargas y escribir_usuario local). Versión 1.1.0 (SemVer minor):
+pyproject, __init__, README, CHANGELOG, pruebas.ps1.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- inyectar las extensiones del usuario en TODOS los filtros: rompería
+  los que traen las suyas a propósito (clasificar-descargas); solo
+  entran donde falta, y el día puntual se resuelve con --extensiones.
+- crear el fichero con valores llenos (~/Descargas etc.): si el
+  usuario no cambió nada debería mandar acciones.json, no un defecto
+  que se disfraza de decisión del usuario; vacío = «no cambiar nada».
+- un comando preparar-config para crear el fichero: quien no sabe
+  programar puede no enterarse; se crea solo al primer uso (y borrarlo
+  lo regenera).
+- mi primer test de «usuario roto» usaba estado-pc: nunca llega a la
+  rama de ficheros del motor y no lee tu fichero (exit 0); reescrito
+  con una acción mover --carpeta --simular. Y la aserción del nombre
+  del fichero fallaba porque Rich parte la palabra en líneas; se
+  aserta el texto estable («no es JSON»).
+
+**Funcionaba a la primera:**
+no: faltó importar Path en usuario.py (NameError en los 16), la _ayuda
+no contiene el nombre del fichero que asertaba un test, y borrar exige
+su campo «confirmar» en el JSON (CAMPOS_POR_TIPO) — el test lo llevaba
+sin él y salía código 3 por validación, no por el fichero roto. Tres
+ajustes y 172 en verde.
+
+**Qué aprendí:**
+un fichero «por usuario y ordenador» es la tercera capa de config (CLI
+> usuario > JSON) y la que hace portable el repo sin tocar el
+compartido; pero su poder tiene que ser EXPLÍCITO: vacío = no cambia
+nada, y lo destructivo (borrar) no se silencia desde el fichero. En
+tests, que una acción llegue a leer TU config no depende del tipo de
+acción: los tipos IA/estado ni la miran — hay que llegar a la rama de
+ficheros del motor. Y en aserciones sobre salida de Rich, mejor un
+texto estable que un token que puede partirse entre líneas.
+
+## 19-11-2026 · Auditar fixtures contra la guía: resumir gana camino feliz
+
+### Prompt 21
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+revisa el escribir_config y la tabla «las fixtures, y quién las pide»
+de la guía de la sesión 4 contra mis tests reales; después: modifica el
+código y soluciona los posibles fallos, y repórtalo en prompts.md y en
+un ADR según sus plantillas.
+
+**Qué corregí del plan:**
+primero la auditoría (con ejecución, no solo leyendo): (1) ejecuté el
+escribir_config del profe sobre MIS datos y salió doble envoltura
+({"version":1,"acciones":{"version":1,…}}) porque mis tests le pasan
+dicts y él solo envuelve listas — rompería test_carga_un_json_correcto
+y test_acepta_tildes_y_utf8, y haría pasar test_version_distinta y
+test_acciones_no_lista por el MOTIVO EQUIVOCADO; además su
+ensure_ascii=True escribe tildes como \u00e1 (comprobado por bytes:
+ASCII puro) y el test de tildes dejaría de probar UTF-8. Veredicto: NO
+sustituir, nuestro fixture es un superconjunto compatible. (2) La
+tabla del profe describe su suite de 28 tests, no la mía de 172:
+descargas solo la pide test_usuario (en test_cli «descargas» son
+nombres de acción), y modelo_falso/ProveedorFalso era CÓDIGO MUERTO
+nadie lo pedía; le faltaban además 7 fixtures que sí uso (runner,
+texto, accion_abrir, proveedor_que_contesta, proveedor_que_rompe,
+env_sin_ia, env_con_ia) — los 32 errors del experimento anterior eran
+justo esos. Cambios de código: (a) test_resumir_escribe_el_resumen con
+modelo_falso (camino feliz que no existía: estado hecho, el .resumen.md
+se escribe con la respuesta y la cabecera, y el <documento> viaja en la
+pregunta); (b) test_resumir_simular_no_pregunta_al_modelo con
+proveedor_que_rompe inyectado; (c) test_codigo_3_json_roto deja de
+pedir escribir_config (la firma la pedía y nunca la llamaba).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- sustituir escribir_config por el del profe: rompe 2 tests y desvirtúa
+  2 (arriba); su contrato es para SU suite de listas, el nuestro para
+  la convención de dicts de test_config.py. No se copia un fixture sin
+  mirar quién lo llama.
+- adaptar mis 4 tests para que encajen con el suyo (pasarles lista):
+  cambiaría tests para que encaje un fixture ajeno, al revés.
+- borrar modelo_falso por no usado: el ejemplo de la guía
+  (test_resumir_con_un_modelo_falso) necesita el doble que GRABA
+  preguntas y sin él no se afirma que el documento viaje bien formado;
+  mejor darle uso que eliminarlo.
+- reescribir la tabla de la guía: es material del profesor, no del
+  repo; la realidad queda documentada en el ADR-0015.
+
+**Funcionaba a la primera:**
+sí: los 2 tests nuevos en verde y la firma limpia, 174 passed in
+15.65 s, sin tocar src/ (solo tests y docs).
+
+**Qué aprendí:**
+un fixture se audita por su CONTRATO y por QUIÉN lo llama, no por cómo
+se ve: el del profe es correcto para su suite y tuyo para la tuya, y lo
+que rompe es la diferencia de convención (lista vs dict). La tabla de
+quién pide qué es un mapa de la suite del profe, no la tuya: cuando
+difieran, manda el grep sobre tests/. Y «código muerto en conftest» se
+descubre igual que en src/: una fixture sin ningún test que la pida no
+protege nada — o le escribes su test (aquí el camino feliz de resumir,
+que además era un hueco de la rúbrica) o la quitas. Añadido: un test
+que pide una fixture y no la llama es ruido que hay que limpiar en la
+misma pasada.
+
+
 
