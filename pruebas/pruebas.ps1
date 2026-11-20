@@ -125,7 +125,7 @@ Paso "pytest pasa los tests" ($LASTEXITCODE -eq 0) $detallePytest
 Write-Host "[2] Ordenes basicas"
 
 $v = Tareas @("version")
-Paso "version imprime 1.1.0" (($v.Codigo -eq 0) -and ($v.Texto -match "1\.1\.0")) $v.Texto.Trim()
+Paso "version imprime 1.0.0" (($v.Codigo -eq 0) -and ($v.Texto -match "1\.0\.0")) $v.Texto.Trim()
 
 $val = Tareas @("validar")
 Paso "validar dice 'acciones validas' y sale 0" (($val.Codigo -eq 0) -and ($val.Texto -match "v.lidas")) ($val.Texto.Trim() -split "`n")[0]

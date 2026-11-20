@@ -120,15 +120,16 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 
 - [ ] Commits pequeños en `main`/`Sesion-4`, uno por pieza (ver lista abajo).
 - [ ] `git switch -c release-1.0` con CHANGELOG, README y versión.
-- [ ] OJO: la versión en `pyproject.toml` y `__init__.py` ya está en **1.1.0**; la rúbrica
-      pide la etiqueta `v1.0.0`. Decidir y dejarlo coherente (etiquetar el commit que fue
-      1.0.0, o subir todo a 1.0.0 si aún no se publicó nada).
+- [ ] OJO: la versión en `pyproject.toml` y `__init__.py` estaba en **1.1.0**; la rúbrica
+      pide la etiqueta `v1.0.0`. Decidido: subir todo a **1.0.0** (nada publicado aún) y
+      preparada la release (CHANGELOG, README, versión). Falta: rama, PR, tag y release.
 - [ ] `gh pr create --fill` → PR con las tres pruebas en verde → `gh pr merge --merge`.
 - [ ] `git tag -a v1.0.0 -m "..."` + `git push --tags`.
 - [ ] `gh release create v1.0.0 --title "cliWork 1.0.0" --notes-file CHANGELOG.md`.
-- [ ] README: se instala con **una orden desde GitHub**:
+- [x] README: se instala con **una orden desde GitHub**:
       `uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0` y
-      `cliWork version` debe decir `1.0.0` (hoy solo está `uv tool install .` y `git clone`).
+      `cliWork version` debe decir `1.0.0` (preparado hoy: ya está en el README y la versión
+      en el código; falta la release en sí).
 
 ### paso-9 (instalación cruzada: la prueba de otra persona)
 
@@ -145,21 +146,23 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 ### Los 4 mínimos (si falla uno, no se evalúa)
 
 - [ ] Se instala siguiendo el README y `--help` funciona. *(comprobar con la orden de GitHub)*
-- [ ] Al menos 3 acciones propias en `acciones.json` funcionan. *(hecho: hay muchas más)*
+- [x] Al menos 3 acciones propias en `acciones.json` funcionan. *(hecho: hay muchas más)*
 - [ ] Ninguna clave ni secreto en el repo ni en su historial. *(revisar: `git log --all -- .env`)*
-- [ ] Historial git real: mínimo 10 commits con mensajes que cuentan el proceso. *(hecho:
+- [x] Historial git real: mínimo 10 commits con mensajes que cuentan el proceso. *(hecho:
       hay más de 15; revisar que los de esta semana también queden)*
 
 ### Los dos criterios que se juegan enteros esta semana (25 puntos)
 
 **Pruebas y calidad · 15 · Excelente (100 %) exige:**
 
-- [ ] Camino feliz + **3 casos feos** con pytest. *(hecho: 176 pruebas; auditadas en
+- [x] Camino feliz + **3 casos feos** con pytest. *(hecho: 176 pruebas; auditadas en
       ADR-0015 y completadas hoy con Prompt 23: capa IA sin red ni tokens)*
-- [ ] En carpetas temporales, nunca sobre ficheros reales. *(hecho: fixture `aislado`)*
-- [ ] Ejecutadas en **GitHub Actions** en los 3 sistemas. *(falta paso-6)*
-- [ ] **Auditadas por ti**: sabes explicar cada `assert` y qué cambio lo pondría en rojo.
-      *(paso-3 hecho 19-11: mutación de `Mover.preparar` → 7 en rojo; falta repasar los asserts)*
+- [x] En carpetas temporales, nunca sobre ficheros reales. *(hecho: fixture `aislado`)*
+- [x] Ejecutadas en **GitHub Actions** en los 3 sistemas. *(hecho: CI verde en las 3 máquinas,
+      ejecución 3 = success, 20-11 → paso-6 cerrado)*
+- [x] **Auditadas por ti**: sabes explicar cada `assert` y qué cambio lo pondría en rojo.
+      *(paso-3 hecho 19-11: mutación de `Mover.preparar` → 7 en rojo; hoy se cerró la auditoría
+      con los fixes de ANSI, `cpu_freq` y el doble de CPU en los tests)*
 
 **Instalación, documentación y proceso · 10 · Excelente (100 %) exige:**
 
@@ -187,7 +190,8 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
 - [ ] Pruebas de config y acciones: casos feos en `tmp_path`, nunca en mis carpetas.
 - [ ] Prueba de `a_nombre_seguro`: quitaba mal la extensión que añade el modelo.
 - [ ] Pruebas de la CLI con CliRunner: códigos de salida 0, 1, 2, 3 y 4.
-- [ ] GitHub Actions: pytest en Ubuntu, Windows y macOS en cada push.
+- [x] GitHub Actions: pytest en Ubuntu, Windows y macOS en cada push. *(hecho: ejecución 3 =
+      success en las 3 máquinas, 20-11 → paso-6 cerrado)*
 - [ ] `scripts/revisar.sh`: el revisor con `opencode run` antes de cada commit.
 - [ ] CHANGELOG revisado a mano, README con la orden de instalación y versión 1.0.0.
 

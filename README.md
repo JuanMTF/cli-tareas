@@ -7,17 +7,16 @@ JSON, nunca el código (ADR-0001).
 
 ## Instalar con una orden
 
-Necesitas [uv](https://docs.astral.sh/uv/). Con el repositorio clonado,
-`uv tool install .` deja el comando `cliWork` en el PATH (v1.1.0):
+Necesitas [uv](https://docs.astral.sh/uv/). Desde GitHub (la release):
 
 ```bash
-git clone https://github.com/JuanMTF/cli-tareas.git
-cd cli-tareas
-uv tool install .
+uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0
 cliWork --help
+cliWork version        # debe decir: 1.0.0
 ```
 
-Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
+Con el repositorio clonado, `uv tool install .` deja el comando `cliWork` en el
+PATH. Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
 desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
 
 ## Órdenes
