@@ -1527,5 +1527,130 @@ real (primera vuelta, segunda vuelta y nombre repetido). Tras restaurar:
   restaurar → verificar verde. Sin el commit previo, `git restore`
   habría sido arriesgado (se habrían borrado los cambios sin commitear).
 
+## 19-11-2026 · Tests de IA sin red ni tokens: el checklist completo queda cubierto
 
+### Prompt 23
+**Herramienta:** GLM-5.3-Flash Free OpenCode
 
+**Prompt del plan (agente Build):**
+ahora tests/test_ia.py, sin red y sin gastar un token: `a_nombre_seguro` con
+parametrize (tildes y signos, «../../etc/passwd», un nombre que el modelo
+devuelve con «.pdf» y la respuesta vacía); resumir con modelo_falso (escribe el
+.md y la pregunta lleva `<documento>`); `--simular` no pregunta al modelo
+(falso.preguntas vacía); una categoría que no está en la lista va a
+sin-clasificar; sin clave → IANoDisponible; con `http://127.0.0.1:9/v1` → «No
+llego». No cambies src/. Termina con: `uv run pytest -v`.
+
+**Qué corregí del plan:**
+la auditoría (leí test_ia.py, test_acciones_ia.py y el fixture `modelo_falso`
+del conftest): el checklist ya se cumplía casi entero; los dos huecos eran (a)
+la **respuesta vacía** del modelo (`a_nombre_seguro("") → ""`, sin test) y (b)
+el **fallo de red con la URL muerta** (`http://127.0.0.1:9/v1` → ConnectError →
+«No llego»). Los demás ya estaban cubiertos: resumir con `modelo_falso`
+escribe el `.md` y la pregunta lleva `<documento>`; `--simular` no pregunta
+(lo blindé con `modelo_falso.llamadas == []`); sin-clasificar ya existe;
+sin clave ya da `IANoDisponible`.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: solo se añadieron/afinaron tests (en tests/, nunca src/).
+
+**Funcionaba a la primera:**
+sí: 176 passed in 14.93 s con el checklist completo.
+
+**Qué aprendí:**
+la capa IA ya venía testeada sin red ni tokens; lo nuevo de esta revisión es
+dequé se decide cómo probar (fake) y cómo defender (rechazo) sin tocar src/.
+
+### Prompt 24
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+el profe ha enviado su versión de los tests de la capa IA (sin red, sin token):
+ProveedorFalso con `preguntas`, `test_limpieza` parametrizado (tildes y signos,
+ruta peligrosa, extensión, vacía), `test_resumir_con_un_modelo_falso` con
+`Motor([...]).ejecutar(...)`, `test_simular_no_pregunta_al_modelo`,
+`test_categoria_rara_va_a_sin_clasificar`, `test_sin_clave_no_hay_ia` y
+`test_sin_red_el_mensaje_es_humano`. Revísalo, ve qué hemos cambiado y habrá
+que reflejarlo en prompts.md y en un ADR según sus plantillas.
+
+**Qué corregí del plan:**
+revisión de los snippets contra la implementación: (1) fake del profe (fábrica
+con respuesta por llamada + `preguntas`) vs el nuestro (instancia + `llamadas`
+con (sistema, usuario, max_tokens)): compatible para lo que se afirma
+(`<documento>` en la pregunta), contratos distintos; se mantiene el nuestro.
+(2) Caso ruta peligrosa: el profe esperaba sanitizado (`etc-passwd`); el repo
+rechaza (`""`) — barrera anti-inyección ya blindada; se mantiene el rechazo.
+(3) Resumir con `Motor` + destino y sin-clasificar: equivalentes a tests ya
+existentes.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- adoptar el sanitizado en vez de rechazar: descartado (cambio de decisión sobre
+  código con invariant anti-inyección y tests).
+- copiar el fake del profe: descartado (contrato fábrica vs instancia).
+
+**Funcionaba a la primera:** sí: 176 passed en verde con el checklist cubierto.
+
+**Qué aprendí:**
+la capa IA ya venía testeada sin red ni tokens; lo nuevo de esta revisión es
+dequé se decide cómo probar (fake) y cómo defender (rechazo) sin tocar src/.
+
+## 19-11-2026 · Tests de la CLI con CliRunner: paso 5 del profe
+
+### Prompt 25
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+ahora tests/test_cli.py con typer.testing.CliRunner: una prueba por código de
+salida (0 ayuda, 1 acción inexistente, 2 opción inexistente, 3 JSON roto y sin
+traza, 4 IA sin clave y el aviso «siguen funcionando»). Comprueba exit_code y
+una frase corta de r.output. Termina con: `uv run pytest -v`.
+
+**Qué corregí del plan:**
+el paso ya estaba implementado: los tests de salida 0-4 (`test_codigo_0_todo_va_bien`,
+`_1_accion_inexistente`, `_2_mal_uso_de_la_cli`, `_3_json_roto`,
+`_4_sin_config_de_ia`) ya existían y pasaban, y el 4 ya comprobaba el aviso
+«las acciones sin IA siguen funcionando». Sólo se afiló el caso 0: el del
+`--help` (`test_menu_aparece_en_la_ayuda`) ahora comprueba `exit_code == 0`
+además de la frase.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno nuevo: los cinco tests de código de salida ya estaban y eran verdes.
+
+**Funcionaba a la primera:**
+sí: verde con el ajuste.
+
+**Qué aprendí:**
+la promesa de la CLI (cada problema con su código de salida) ya estaba con su
+test; el ajuste fino (exit 0 en la ayuda) cerró el checklist del paso 5.
+
+## 19-11-2026 · Los tests del profe para las salidas de la CLI (0-4) se comparan
+
+### Prompt 26
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+el profe ha enviado sus tests de salida con CliRunner: `test_json_roto_sale_con_3_y_sin_traza`
+(`--config` con JSON roto → validar → 3, «no es JSON válido»),
+`test_accion_que_no_existe_sale_con_1` (`--config` con borrar → ejecutar → 1),
+`test_opcion_que_no_existe_sale_con_2` (`listar --inventada` → 2) y
+`test_ia_sin_clave_sale_con_4` (`--config` con resumir → ejecutar → 4, «siguen
+funcionando»). Revísalo, compara con los nuestros y actualiza el ADR.
+
+**Qué corregí del plan:**
+revisión de los snippets contra los tests del repo: los cinco códigos (0-4) ya
+tenían su test con `exit_code` + frase y sin traceback donde aplica; los del
+profe son formulaciones alternativas (vía `--config` con JSON temporal y acción
+concreta). Frase distinta: profe «no es JSON válido» vs repo «JSON inválido en
+{ruta} (línea X, columna Y)…». Decisiones: mantener la suite actual.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- sustituir los tests por los del profe: descartada (redundante / cambio de
+  estilo ajeno).
+- cambiar la frase del test 3 al del profe: descartada (la nuestra es más rica:
+  incluye línea y columna).
+
+**Funcionaba a la primera:** sí: 176 passed en verde con el checklist de salidas cubierto.
+
+**Qué aprendí:**
+una misma promesa (código de salida 0-4) puede probarse por caminos distintos;
+lo importante es que el código y la frase se comprueben.

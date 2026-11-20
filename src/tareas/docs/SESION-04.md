@@ -62,7 +62,11 @@ con la etiqueta `v1.0.0`.
 ### paso-4 (la IA sin red: ProveedorFalso)
 
 - [x] `tests/test_ia.py`: `a_nombre_seguro` con parametrize (tildes, rutas peligrosas,
-  extensión duplicada, vacío), 401/429/formato raro → mensaje humano.
+  extensión duplicada, vacío), 401/429/formato raro → mensaje humano, y
+  `test_proveedor_centro_no_llega_a_una_url_muerta_da_4` (con `http://127.0.0.1:9/v1`
+  → «No llego»). Además `test_acciones_ia.py`: respuesta vacía del modelo y
+  `--simular` con `modelo_falso.llamadas == []`; resumir con `modelo_falso` escribe
+  el `.md` con la cabecera y el `<documento>`; sin-clasificar fuera de lista.
 - [x] `tests/test_acciones_ia.py`: resumir/renombrar-ia/clasificar con `ProveedorFalso`;
   `--simular` no pregunta al modelo; inyección → «saltado» o «sin-clasificar».
 - [x] Camino feliz de `resumir` con `modelo_falso`: el `.resumen.md` se escribe, la
@@ -140,8 +144,8 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 
 **Pruebas y calidad · 15 · Excelente (100 %) exige:**
 
-- [ ] Camino feliz + **3 casos feos** con pytest. *(hecho: 174 pruebas; auditadas en
-      ADR-0015 lo que fue de hoy)*
+- [ ] Camino feliz + **3 casos feos** con pytest. *(hecho: 176 pruebas; auditadas en
+      ADR-0015 y completadas hoy con Prompt 23: capa IA sin red ni tokens)*
 - [ ] En carpetas temporales, nunca sobre ficheros reales. *(hecho: fixture `aislado`)*
 - [ ] Ejecutadas en **GitHub Actions** en los 3 sistemas. *(falta paso-6)*
 - [ ] **Auditadas por ti**: sabes explicar cada `assert` y qué cambio lo pondría en rojo.

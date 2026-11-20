@@ -143,6 +143,24 @@ def test_url_mal_escrita_da_4(env_con_ia, monkeypatch: pytest.MonkeyPatch) -> No
     assert "no es válida" in str(error.value)
 
 
+def test_proveedor_centro_no_llega_a_una_url_muerta_da_4(
+    env_con_ia, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Con la URL apuntando a un puerto muerto (127.0.0.1:9) no hay red:
+    httpx ConnectError → IANoDisponible con «No llego» (código 4)."""
+    monkeypatch.setenv("CENTRO_IA_URL", "http://127.0.0.1:9/v1")
+
+    def _falso(_url: str, **_kwargs: object) -> httpx.Response:
+        raise httpx.ConnectError("no hay servidor disponible")
+
+    monkeypatch.setattr(ia.httpx, "post", _falso)
+    proveedor = ProveedorCentro.desde_entorno()
+    with pytest.raises(IANoDisponible) as error:
+        proveedor.completar("sistema", "usuario")
+    assert "No llego" in str(error.value)
+    assert error.value.codigo_salida == 4
+
+
 def test_mensaje_de_estado_500_y_404() -> None:
     """La tabla de estados: 5xx es «inténtalo más tarde» y 404 apunta al modelo."""
     assert "fallo interno" in ia.ProveedorCentro._mensaje_estado(503)

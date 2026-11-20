@@ -80,6 +80,8 @@ def _fichero_sin_texto(tmp_path: Path, nombre: str) -> Path:
         ("manual-útil", "manual-util"),
         # 60 caracteres como mucho
         ("a" * 80, "a" * 60),
+        # respuesta vacía del modelo: no queda nombre usable
+        ("", ""),
     ],
 )
 def test_a_nombre_seguro_limpia(entrada: str, esperado: str) -> None:
@@ -231,14 +233,14 @@ def test_resumir_escribe_el_resumen(tmp_path: Path, modelo_falso) -> None:
 
 
 def test_resumir_simular_no_pregunta_al_modelo(
-    tmp_path: Path, proveedor_que_rompe
+    tmp_path: Path, modelo_falso
 ) -> None:
     """--simular cuenta caracteres sin gastar: el modelo no recibe nada."""
     fichero = _fichero(tmp_path, "tema-1.txt")
     accion = Resumir(_config_resumir())
-    accion.proveedor = proveedor_que_rompe  # si lo llamara, revienta
     resultado = accion.ejecutar([fichero], True)[0]
     assert resultado.estado == "simulado"
+    assert modelo_falso.llamadas == []  # lo que le preguntas queda vacío
     assert not list(tmp_path.glob("*.resumen.md"))  # nada escrito
 
 

@@ -799,6 +799,7 @@ def test_mensaje_vacio_explica_el_filtro(tmp_path: Path) -> None:
 
 def test_menu_aparece_en_la_ayuda() -> None:
     resultado = runner.invoke(app, ["--help"])
+    assert resultado.exit_code == 0, _texto(resultado)
     assert "menu" in _texto(resultado)
 
 
