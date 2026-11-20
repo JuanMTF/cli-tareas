@@ -1654,3 +1654,80 @@ concreta). Frase distinta: profe «no es JSON válido» vs repo «JSON inválido
 **Qué aprendí:**
 una misma promesa (código de salida 0-4) puede probarse por caminos distintos;
 lo importante es que el código y la frase se comprueben.
+
+## 20-11-2026 · Push rechazado (PAT sin scope `workflow`) y batería completa en verde
+
+### Prompt 27
+**Herramienta:** terminal (git push y batería) · GLM-5.3-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+hago `git push` para subir el workflow de GitHub Actions (paso-6) y me
+rechaza el push: `! [remote rejected] Sesion-4 -> Sesion-4 (refusing to
+allow a Personal Access Token to create or update workflow
+.github/workflows/pruebas.yml without workflow scope)`. Además paso la
+batería completa (`pruebas/ejecutartareas.bat`, opción 1): 48 pasos,
+0 fallos.
+
+**Qué corregí del plan:**
+el push no es un fallo del código: es la PAT de GitHub sin el scope
+`workflow`, el que permite subir cambios en `.github/workflows/`. Arreglo:
+GitHub → Settings → Developer settings → Personal access tokens → editar
+la PAT → marcar `workflow` → volver a hacer push. La batería salió verde
+entera: `uv run pytest` → **176 passed**, y las 48 comprobaciones en OK
+(incluidas las 2 de error previsto, que piden «s»).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: no se tocó código ni el workflow; solo falta reintentar el push
+con la PAT ampliada.
+
+**Funcionaba a la primera:**
+la batería, sí (48/48); el push, no (scope del token, no del repo).
+
+**Qué aprendí:**
+subir un workflow a GitHub exige el scope `workflow` en la PAT: sin él,
+el push se rechaza aunque el resto del repo suba bien. Y la batería
+completa (nuestra) es la prueba final antes de dar un paso por bueno:
+aquí confirmó 176 pruebas y 0 fallos antes de tocar CI.
+
+## 20-11-2026 · CI rojo en los tres sistemas: sin logs, diagnóstico por anotaciones
+
+### Prompt 28
+**Herramienta:** terminal + web (API de GitHub) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+el paso-6 está en rojo: la ejecución de GitHub Actions falla en las 3
+máquinas («Process completed with exit code 1» en `uv run pytest`, con
+`uv sync` bien) y no se puede leer el log (GitHub pide iniciar sesión).
+Arregla el CI y deja documentado el proceso.
+
+**Qué corregí del plan:**
+no era el entorno ni las dependencias: dos tests
+(`test_aviso_cuando_se_supera_el_umbral` y
+`test_estado_pc_se_pinta_como_tabla`) exigían «AVISO: CPU al» con
+umbral 1% contra la CPU MEDIDA de verdad (`psutil.cpu_percent(interval=0.5)`):
+en el escritorio de casa siempre hay fondo (≥1%), pero en una VM ociosa
+de GitHub Actions esa muestra de 0,5 s sale 0,0% → el aviso no se pinta →
+assert rojo en ubuntu, windows y macos a la vez. Arreglo: doble de
+`psutil.cpu_percent` fijado a 42% con `monkeypatch` (el test comprueba
+que el AVISO se pinta, no la carga del equipo). Además, el workflow sube
+`checkout` v4→v7 y `setup-uv` v5→v10.3.3 (los 3 avisos de Node.js 20
+desaparecen) y añade un paso `if: failure()` que convierte cada
+`FAILED`/`ERROR` en una anotación roja de la ejecución.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: solo se tocaron los 2 tests (con su explicación dentro) y el
+workflow; el código de `src/` no se toca.
+
+**Funcionaba a la primera:**
+la API de anotaciones de GitHub (se lee sin sesión:
+`GET /repos/.../check-runs/{id}/annotations`) y la auditoría de los
+tests; en cambio el log (`/actions/jobs/{id}/logs`) devuelve 403 sin
+token, y el `--basetemp` de prueba fuera del repo no reprodujo el fallo
+(en local siempre hay CPU de sobra).
+
+**Qué aprendí:**
+los logs de GitHub Actions exigen autenticación; las anotaciones no —
+por eso el paso nuevo: la próxima ejecución dirá ella sola qué test
+falla, sin copiar nada. Y una regla para siempre: ningún `assert` debe
+depender de una medida viva de la máquina (CPU, memoria, red) si un
+umbral puede cruzarla de milagro: el valor se fija con un doble.

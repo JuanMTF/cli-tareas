@@ -15,10 +15,10 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Instala uv (con Python 3.12)
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           python-version: "3.12"
 
@@ -26,4 +26,16 @@ jobs:
         run: uv sync
 
       - name: Ejecuta la suite (uv run pytest)
-        run: uv run pytest -q
+        run: uv run pytest -v
+
+      # Si la suite falla, se repite sin trazas y cada test fallido se
+      # convierte en una anotación roja de esta ejecución. Motivo: el log
+      # completo de GitHub pide iniciar sesión (no se puede leer desde
+      # fuera), pero la API de anotaciones es pública y así se ve el test
+      # culpable sin copiar nada (ADR-0018).
+      - name: Anota los tests fallidos
+        if: failure()
+        shell: bash
+        run: |
+          uv run pytest --tb=no -q -rfE > fallos.txt 2>&1 || true
+          grep -E "^(FAILED|ERROR) " fallos.txt | sed "s/^/::error::/" || true

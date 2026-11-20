@@ -914,8 +914,11 @@ def test_tabla_simulacion_rutas_con_virgulilla(tmp_path: Path) -> None:
     assert "Todo dentro de" in texto  # el pie de tabla aparece con su ruta
 
 
-def test_estado_pc_se_pinta_como_tabla(tmp_path: Path) -> None:
+def test_estado_pc_se_pinta_como_tabla(tmp_path: Path, monkeypatch) -> None:
     """`ejecutar estado-pc` pinta el informe como tabla con los AVISO dentro."""
+    # CPU fija con un doble: la medida es real (muestra de 0,5 s) y en una
+    # máquina ociosa —un runner de CI— puede quedar en 0% y no haber aviso.
+    monkeypatch.setattr("psutil.cpu_percent", lambda interval=None: 42.0)
     config_ruta = tmp_path / "acciones.json"
     config_ruta.write_text(
         json.dumps(

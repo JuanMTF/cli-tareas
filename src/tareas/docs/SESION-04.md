@@ -15,7 +15,7 @@ con la etiqueta `v1.0.0`.
 - [x] paso-3 (la prueba que prueba: romper el código a propósito) (19-11-2026)
 - [x] paso-4 (la IA sin red: ProveedorFalso) (17-11-2026)
 - [x] paso-5 (la CLI desde fuera: CliRunner, códigos 0-4) (17-11-2026)
-- [ ] paso-6 (GitHub Actions en tres sistemas) — el workflow YA está commitear; falta push y Actions en verde
+- [ ] paso-6 (GitHub Actions en tres sistemas) — push hecho (con PAT con scope `workflow`); Actions corrió pero ROJO en los 3 sistemas: diagnosticado y arreglado (Prompt 28), falta verlo en verde
 - [x] paso-7 (opencode run: scripts/revisar.sh) (17-11-2026)
 - [ ] paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0)
 - [ ] paso-9 (instalación cruzada: la prueba de otra persona)
@@ -88,8 +88,18 @@ con la etiqueta `v1.0.0`.
 - [x] Commit de `.github/workflows/pruebas.yml` (ya está en el repo; verificado 19-11:
       ya no aparece `?? .github/` en `git status`).
 - [ ] Push y abrir la pestaña **Actions**: las tres máquinas en verde.
+      (20-11: el push se rechazó — la PAT no tenía el scope `workflow`;
+      YA se marcó y el push subió. La ejecución 1 corrió pero salió en
+      **ROJO en los 3 sistemas** en `uv run pytest`.)
 - [ ] Si algo se pone en rojo en Windows o macOS: leer el error y arreglar (las 6 reglas
       multiplataforma). Ese arreglo es uno de los mejores commits de la semana.
+      (20-11: rojo en los 3 — Prompt 28. El log pide sesión en GitHub, así
+      que el workflow lleva ya un paso que convierte cada `FAILED`/`ERROR`
+      en anotación legible por API sin sesión. La auditoría apuntó a 2
+      tests que exigían «AVISO: CPU al» con la CPU real ≥1%: en un runner
+      ocioso la muestra de 0,5 s sale 0% → arreglados con un doble de
+      `psutil.cpu_percent` a 42%. 176 passed en local; falta ver las 3
+      en verde.)
 
 ### paso-7 (opencode run: scripts/revisar.sh)
 
@@ -220,3 +230,22 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   muerto), `resumir --simular` con `proveedor_que_rompe`, y firma limpia en
   `test_codigo_3_json_roto`. **174 passed**. Ficheros: `tests/test_acciones_ia.py`,
   `tests/test_cli.py`, `adr/0015-…`, `prompts.md`.
+- (20-nov) Push del CI bloqueado: GitHub rechaza subir `.github/workflows/pruebas.yml`
+  con una PAT sin el scope `workflow` («refusing to allow a Personal Access Token to
+  create or update workflow… without workflow scope»). Arreglo: marcar `workflow` en la
+  PAT (Settings → Developer settings → Personal access tokens) y reintentar el push.
+  Documentado en Prompt 27 y ADR-0018.
+- (20-nov) Batería completa (`pruebas/ejecutartareas.bat`, opción 1): **48 pasos, 0
+  fallos**, con `uv run pytest` → **176 passed** (incluye las 2 pruebas de error
+  previsto, que piden «s»). La batería completa es la prueba final antes de dar un
+  paso por bueno.
+- (20-nov) CI rojo en los 3 sistemas (ejecución 1 de `pruebas`, commit `6102864`):
+  `uv sync` bien y `uv run pytest` con código 1 en ubuntu, windows y macos. El log
+  pide sesión (API 403 sin token), pero la API de anotaciones es pública. Diagnóstico
+  en Prompt 28: 2 tests (`test_aviso_cuando_se_supera_el_umbral` y
+  `test_estado_pc_se_pinta_como_tabla`) exigían «AVISO: CPU al» con la CPU medida
+  de verdad ≥1% — garantizado en escritorio, NO en una VM ociosa (muestra de 0,5 s
+  → 0%) → doble de `psutil.cpu_percent` a 42% con `monkeypatch`. Workflow:
+  `checkout@v7`, `setup-uv@v10.3.3` (adiós a los 3 avisos de Node 20) y paso
+  `if: failure()` que anota los tests fallidos. `uv run pytest` → **176 passed**;
+  falta push y ver las 3 en verde.
