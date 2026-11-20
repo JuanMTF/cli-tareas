@@ -93,3 +93,7 @@ GitHub exige el scope `workflow` en la PAT para tocar ficheros bajo
   'cpu_freq'` (7 tests: se captura `AttributeError` en el informe).
   `uv run pytest` en local → **176 passed** con los arreglos. Pendiente:
   push y ver las 3 en verde.
+- **Tercera ronda / CI en VERDE (20-11-2026):** la ejecución 3 (run
+  `44828400986`, commit `a37e647`) salió **success** en las 3 máquinas
+  (macos, windows, ubuntu): los fixes de ANSI y de `cpu_freq` estaban
+  completos. **Paso-6 cerrado: CI en verde en los tres sistemas.**

@@ -15,7 +15,7 @@ con la etiqueta `v1.0.0`.
 - [x] paso-3 (la prueba que prueba: romper el código a propósito) (19-11-2026)
 - [x] paso-4 (la IA sin red: ProveedorFalso) (17-11-2026)
 - [x] paso-5 (la CLI desde fuera: CliRunner, códigos 0-4) (17-11-2026)
-- [ ] paso-6 (GitHub Actions en tres sistemas) — push hecho (con PAT con scope `workflow`); Actions corrió pero ROJO en los 3 sistemas: diagnosticado y arreglado (Prompt 28), falta verlo en verde
+- [x] paso-6 (GitHub Actions en tres sistemas) (20-11-2026)
 - [x] paso-7 (opencode run: scripts/revisar.sh) (17-11-2026)
 - [ ] paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0)
 - [ ] paso-9 (instalación cruzada: la prueba de otra persona)
@@ -256,3 +256,8 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   attribute 'cpu_freq'` en 7 tests del informe de equipo (psutil no lo implementa en
   macOS; el `except` ahora también captura `AttributeError`). `uv run pytest` local →
   **176 passed** con ambos arreglos. **Pendiente: push y ver las 3 en verde.**
+- (20-nov) **Tercera ronda: CI en VERDE (run `44828400986`, commit `a37e647`).** La
+  ejecución 3 salió **success** en las 3 máquinas (macos, windows, ubuntu) → **paso-6
+  CERRADO**. Los fixes de la segunda ronda estaban completos y el push del commit
+  `a37e647` («sesion 4 paso 6 reparacion IA») activó la suite en verde. Pendiente:
+  **paso-8** (release: rama `release-1.0`, PR, CHANGELOG y etiqueta `v1.0.0`).

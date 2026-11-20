@@ -1766,4 +1766,8 @@ en macOS desde el propio error.
 - psutil no implementa `cpu_freq` en todos los SO: el código debe capturar
   también `AttributeError`.
 
-**Pendiente:** push y ver si las 3 máquinas quedan en verde.
+**Resultado (20-11-2026):** la ejecución 3 (run `44828400986`, commit
+`a37e647`) salió **SUCCESS en las 3 máquinas** (macos, windows, ubuntu):
+los dos fixes estaban completos (ANSI en el test y `cpu_freq` en macOS).
+
+**Pendiente:** **NONE** — el paso-6 queda cerrado: CI en verde en los 3 SO.
