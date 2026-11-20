@@ -1093,7 +1093,9 @@ class EstadoPC(Accion):
                 frec = psutil.cpu_freq()
                 if frec:
                     lineas.append(f"frecuencia actual {frec.current:.0f} MHz")
-            except (NotImplementedError, OSError):
+            except (AttributeError, NotImplementedError, OSError):
+                # psutil no tiene cpu_freq en todos los SO (p. ej. macOS): se
+                # dice «no disponible» igual que en el resto de sensores.
                 pass
             partes.append("; ".join(lineas))
             if carga >= float(umbrales.get("cpu_pct", 101)):

@@ -85,3 +85,11 @@ GitHub exige el scope `workflow` en la PAT para tocar ficheros bajo
 - `uv run pytest` en local → **176 passed** con todos los cambios.
   **Pendiente: push y ver las 3 máquinas en verde** (si aún sale rojo, el
   paso de anotaciones dirá qué test es, vía la API pública).
+- Segunda ronda (Prompts 28-29): la ejecución salió **ROJA otra vez** y
+  los tests fallidos fueron (desde el log copiado y los anotaciones):
+  `test_opcion_inexistente_en_espanol` (las 3 SO: el error de opción se
+  pinta con ANSI, `No existe la opción: \x1b[1;32m-t\x1b[0m` — se limpia en
+  `_texto`) y, en macOS, `AttributeError: module 'psutil' has no attribute
+  'cpu_freq'` (7 tests: se captura `AttributeError` en el informe).
+  `uv run pytest` en local → **176 passed** con los arreglos. Pendiente:
+  push y ver las 3 en verde.

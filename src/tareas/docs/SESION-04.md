@@ -249,3 +249,10 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   `checkout@v7`, `setup-uv@v10.3.3` (adiós a los 3 avisos de Node 20) y paso
   `if: failure()` que anota los tests fallidos. `uv run pytest` → **176 passed**;
   falta push y ver las 3 en verde.
+- (20-nov) Segunda ronda CI (ejecución 2, tras el push de la ronda 28): `test_opcion_inexistente_en_espanol`
+  fallaba en las 3 SO — con color activo la opción del error se pinta con ANSI
+  (`\x1b[1;32m-t\x1b[0m`) y la frase se parte; el `_texto` de `test_traduccion` ahora
+  quita el ANSI antes de comparar. En macOS: `AttributeError: module 'psutil' has no
+  attribute 'cpu_freq'` en 7 tests del informe de equipo (psutil no lo implementa en
+  macOS; el `except` ahora también captura `AttributeError`). `uv run pytest` local →
+  **176 passed** con ambos arreglos. **Pendiente: push y ver las 3 en verde.**

@@ -1731,3 +1731,39 @@ por eso el paso nuevo: la próxima ejecución dirá ella sola qué test
 falla, sin copiar nada. Y una regla para siempre: ningún `assert` debe
 depender de una medida viva de la máquina (CPU, memoria, red) si un
 umbral puede cruzarla de milagro: el valor se fija con un doble.
+
+## 20-11-2026 · Diagnóstico definitivo del CI: ANSI en el error de `-t` y psutil en macOS
+
+### Prompt 29
+**Herramienta:** terminal + web (API de GitHub) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+tras el push de la ronda anterior (workflow con paso de anotaciones), las
+ejecuciones salieron ROJAS de nuevo y la API de anotaciones dio los tests
+fallidos: `test_opcion_inexistente_en_espanol` (en las 3 SO) y, en macOS,
+el `AttributeError: module 'psutil' has no attribute 'cpu_freq'`.
+
+**Qué corregí del plan:**
+- `src/tareas/acciones.py`: el `except` del `psutil.cpu_freq` ahora también
+  captura `AttributeError` (en macOS psutil no lo implementa): el informe
+  del equipo ya no se cae ahí y dice «frecuencia no disponible».
+- `tests/test_traduccion.py`: `_texto` quita el ANSI (`\x1b[...[m`) antes de
+  comparar: con color activo la opción del error se pinta (`\x1b[1;32m-t\x1b[0m`)
+  y la frase se parte.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: se arreglaron el fichero de acciones y el `_texto` del test.
+
+**Funcionaba a la primera:**
+repro `FORCE_COLOR=1` → el output con color replica fielmente el del CI
+(fallo por ANSI) y el caso sin color (falla localmente nunca). `psutil`
+en macOS desde el propio error.
+
+**Qué aprendí (reglas nuevas):**
+- un `assert` sobre texto pegado no aguanta códigos de color ANSI: se
+  normaliza antes de comparar (y el color es cosa de consola real, no del
+  texto);
+- psutil no implementa `cpu_freq` en todos los SO: el código debe capturar
+  también `AttributeError`.
+
+**Pendiente:** push y ver si las 3 máquinas quedan en verde.
