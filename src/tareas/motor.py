@@ -146,6 +146,11 @@ class Motor:
             # Informe del equipo: solo lectura, sin carpeta ni ficheros.
             return accion.ejecutar([], simular, urls, abrir, destino)
 
+        if tipo == "ip-conf":
+            # Configuración de red: interactiva (listado + selección + valores),
+            # sin carpeta ni ficheros (como «estado-pc»).
+            return accion.ejecutar([], simular, urls, abrir, destino)
+
         # Acciones sobre ficheros: mover, renombrar, borrar, transformar, comprimir.
         # Prioridad del origen (ADR-0014): la opción --carpeta de la CLI manda;
         # sin ella, TU configUsuario.json (mismo repo, rutas por ordenador);

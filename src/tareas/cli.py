@@ -1019,10 +1019,10 @@ def _bucle_menu(ctx: typer.Context) -> None:
         tipo = str(accion.get("tipo", ""))
 
         carpeta: str | None = None
-        if tipo not in ("abrir", "limpiar-usb", "estado-pc"):
-            # «abrir» va con URLs, «limpiar-usb» con el registro y
-            # «estado-pc» lee el equipo: ninguno usa carpeta de origen,
-            # así que no se pregunta.
+        if tipo not in ("abrir", "limpiar-usb", "estado-pc", "ip-conf"):
+            # «abrir» va con URLs, «limpiar-usb» con el registro, «estado-pc»
+            # y «ip-conf» trabajan con el equipo (leer o configurar): ninguno
+            # usa carpeta de origen, así que no se pregunta.
             origen_json = str(accion.get("origen") or "").strip()
             # El defecto visible: TU configUsuario.json manda sobre la
             # «origen» del JSON (igual que en ejecutar, ADR-0014); sin

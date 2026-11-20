@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import typer
 import unicodedata
 import webbrowser
 import zipfile
@@ -1188,6 +1189,126 @@ class EstadoPC(Accion):
 
         # Multilínea: la CLI lo pinta como tabla (una medida por fila).
         return "\n".join(partes)
+
+
+@Accion.registrar("ip-conf")
+class IpConfig(Accion):
+    """Configura la red del equipo: lista adaptadores, se selecciona, y se
+    pide IP, máscara, puerta y DNS (con default 8.8.8.8 si no se escribe).
+
+    Interactiva como «estado-pc»: no usa IA ni carpeta ni ficheros (el
+    adaptador se elige en la propia ejecución y los valores se escriben en el
+    sistema con comandos de red por SO). Con --simular NO escribe nada: solo
+    lista y describe lo que se haría.
+    """
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        if simular:
+            return [
+                Resultado(
+                    None,
+                    None,
+                    "simulado",
+                    "SIMULACIÓN: leería los adaptadores de red, elegiría uno y "
+                    "pediría IP, máscara, puerta y DNS (8.8.8.8 por defecto) para "
+                    "configurarlo.",
+                )
+            ]
+        adaptadores = self._listar_adaptadores()
+        if not adaptadores:
+            return [Resultado(None, None, "hecho", "No se encontró ningún adaptador de red.")]
+        for numero, adaptador in enumerate(adaptadores, start=1):
+            typer.echo(f"{numero}) {adaptador['nombre']}: {adaptador['info']}")
+        seleccion = self._pedir_numero("Adaptador a configurar", len(adaptadores))
+        if seleccion is None:
+            return [Resultado(None, None, "cancelado", "Cancelado: no se configuró nada.")]
+        adaptador = adaptadores[seleccion - 1]
+        nombre = adaptador["nombre"]
+        ip = (typer.prompt(f"IP de «{nombre}»") or "").strip()
+        mascara = (typer.prompt(f"Máscara de «{nombre}»") or "").strip()
+        puerta = (typer.prompt(f"Puerta (gateway) de «{nombre}»") or "").strip()
+        dns = (typer.prompt("DNS1 (Enter = 8.8.8.8)", default="8.8.8.8", show_default=False) or "8.8.8.8").strip()
+
+        comando = self._comando_aplicar(nombre, ip, mascara, puerta, dns)
+        completado = subprocess.run(comando, capture_output=True, text=True, check=False)
+        if completado.returncode != 0:
+            raise TareasError(f"No se pudo aplicar la configuración de red: {completado.stderr.strip()}")
+        return [
+            Resultado(
+                None,
+                None,
+                "hecho",
+                f"Red configurada en «{nombre}»: IP {ip}/{mascara}, puerta {puerta}, DNS {dns}.",
+            )
+        ]
+
+    def _pedir_numero(self, texto: str, maximo: int) -> int | None:
+        while True:
+            try:
+                entrada = typer.prompt(texto, default="", show_default=False).strip()
+            except (typer.Abort, KeyboardInterrupt, EOFError):
+                return None
+            if entrada == "":
+                return None
+            try:
+                numero = int(entrada)
+            except ValueError:
+                typer.echo(f"Aviso: «{entrada}» no es un número.")
+                continue
+            if numero == 0:
+                return None
+            if 1 <= numero <= maximo:
+                return numero
+            typer.echo(f"Aviso: el número va del 1 al {maximo}.")
+
+    def _comando_aplicar(
+        self, nombre: str, ip: str, mascara: str, puerta: str, dns: str
+    ) -> list[str]:
+        if sys.platform == "win32":
+            return [
+                "netsh",
+                "interface",
+                "ip",
+                "set",
+                "addresses",
+                nombre,
+                "static",
+                ip,
+                mascara,
+                puerta,
+                dns,
+            ]
+        if sys.platform == "darwin":
+            return ["networksetup", "-setmanual", nombre, ip, mascara, puerta, dns]
+        return ["ip", "addr", "add", nombre, "dev", nombre, f"{ip}/{mascara}"]
+
+    def _listar_adaptadores(self) -> list[dict[str, str]]:
+        import psutil
+
+        adaptadores: list[dict[str, str]] = []
+        for nombre, direcciones in psutil.net_if_addrs().items():
+            info = ", ".join(f"{d.address}/{d.netmask}" for d in direcciones if d.address) or "sin direccion"
+            adaptadores.append({"nombre": nombre, "info": info})
+        return adaptadores
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """No se usa: «ip-conf» trabaja con el sistema, no por fichero."""
+        raise NotImplementedError("ip-conf no trabaja por ficheros.")
 
 
 def leer_texto(fichero: Path, tope: int) -> str:

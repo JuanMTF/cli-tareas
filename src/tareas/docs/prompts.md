@@ -1771,3 +1771,36 @@ en macOS desde el propio error.
 los dos fixes estaban completos (ANSI en el test y `cpu_freq` en macOS).
 
 **Pendiente:** **NONE** — el paso-6 queda cerrado: CI en verde en los 3 SO.
+
+## 21-11-2026 · Nueva acción `ip-conf`: configurar red por adaptador
+
+### Prompt 30
+**Herramienta:** terminal · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+nueva acción `ip-conf`: listar los adaptadores de red del equipo, que se
+seleccione uno, y pedir IP, máscara y puerta (gateway) y DNS1 (con default
+8.8.8.8 si no se escribe).
+
+**Qué corregí del plan:**
+- tipo «ip-conf» añadido a `TIPOS_CONOCIDOS` y a `CAMPOS_POR_TIPO` (vacío:
+  la acción es interactiva como «estado-pc», no lleva campos de fichero);
+- subclase `IpConfig` registrada con `@Accion.registrar("ip-conf")`;
+- dispatch en `motor.py` (igual que «estado-pc») y exclusión de carpeta en
+  el menú de `cli.py`.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- ninguno: arranque del build de la acción.
+
+**Qué aprendí (reglas nuevas):**
+- una acción que escribe en el SISTEMA (no en ficheros) sigue el molde de
+  «estado-pc»/«limpiar-usb»: sin carpeta, y con `--simular` que no escribe.
+
+**Resultado (21-11-2026):** build completado: `IpConfig` con listado de
+adaptadores (psutil), selección numerada, prompts de IP/máscara/puerta/
+DNS (default 8.8.8.8) y comandos de red por SO (netsh/networksetup/ip).
+Tests nuevos (`tests/test_ipconf.py`): validación, registro, simulación y
+listado → **181 passed** en suite completa; smoke CLI con `--simular` OK.
+
+**Pendiente:** commit del build (lo hace el responsable) y, si procede, PR de
+la rama de release.

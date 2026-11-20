@@ -18,7 +18,7 @@ RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
 TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
                    "comprimir", "copiar", "limpiar-usb", "resumir",
-                   "renombrar-ia", "clasificar", "estado-pc")
+                   "renombrar-ia", "clasificar", "estado-pc", "ip-conf")
 
 # Tipos que consultan al proveedor de IA (ProveedorCentro, en ia.py): el
 # motor les inyecta el proveedor y, con --simular, no se llama al modelo.
@@ -68,6 +68,10 @@ CAMPOS_POR_TIPO: dict[str, tuple[str, ...]] = {
     # Informe del equipo (CPU, memoria, discos, temperaturas...): solo lectura,
     # sin carpeta ni ficheros (como «limpiar-usb», no lleva campos propios).
     "estado-pc": (),
+    # Configuración de red (IP, máscara, puerta, DNS) por adaptador: interactiva
+    # (listado + selección + valores en la ejecución), sin campos de fichero
+    # (como «estado-pc»): no lleva campos propios.
+    "ip-conf": (),
 }
 
 # Campos que se reconocen dentro de 'filtro'.

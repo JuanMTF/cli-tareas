@@ -88,6 +88,11 @@
       "avisos": { "disco_pct": 70, "memoria_pct": 85, "cpu_pct": 90 }
     },
     {
+      "nombre": "ip-conf",
+      "descripcion": "Configura la red: lista los adaptadores, el usuario elige uno y pide IP, mascara y puerta (gateway) y DNS1 (con default 8.8.8.8 si no se pone).",
+      "tipo": "ip-conf"
+    },
+    {
       "nombre": "renombrar-capturas",
       "descripcion": "Renombra capturas de pantalla a NOMBRE_numero_fecha_hora: el nombre generico lo pasas con -n (ej.: -n Capturas) y la carpeta con -r o -c; sin opciones usa la carpeta de capturas del JSON. Solo .png/.jpg y nunca sobrescribe.",
       "tipo": "renombrar",
