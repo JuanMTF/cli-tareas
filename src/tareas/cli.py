@@ -713,7 +713,9 @@ class NombresAccion:
         "Opción global --config: el fichero de acciones se pasa justo después de "
         "«cliWork», con su valor, y antes de la orden "
         "(ej.: cliWork --config ~/mis-acciones.json ejecutar ordenar-descargas --simular). "
-        "Sin --config se usa tu fichero personal «mis-acciones.json»."
+        "Sin --config se usa tu fichero personal «mis-acciones.json». "
+        "Acciones que escriben en el sistema (ip-conf, limpiar-usb) requieren consola "
+        "con permisos de administrador; con --simular no."
     )
 )
 def ejecutar(

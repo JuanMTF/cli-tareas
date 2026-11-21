@@ -7,16 +7,17 @@ JSON, nunca el código (ADR-0001).
 
 ## Instalar con una orden
 
-Necesitas [uv](https://docs.astral.sh/uv/#highlights). Desde GitHub (la release):
+Necesitas [uv](https://docs.astral.sh/uv/). Con el repositorio clonado,
+`uv tool install` deja el comando `cliWork` en el PATH (v1.1.0):
 
 ```bash
-uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0
+git clone https://github.com/JuanMTF/cli-tareas.git
+cd cli-tareas
+uv tool install .
 cliWork --help
-cliWork version        # debe decir: 1.0.0
 ```
 
-Con el repositorio clonado, `uv tool install .` deja el comando `cliWork` en el
-PATH. Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
+Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
 desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
 
 ## Órdenes
@@ -31,11 +32,10 @@ desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
   si algo pasa los umbrales del JSON (`avisos`: disco/memoria/CPU en %).
   Solo lectura.
 - `uv run cliWork --menu` — menú con números para lanzar acciones sin teclear
-  órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones); al
-  acabar vuelve al menú solo (solo `0` o Ctrl+C salen). La carpeta que
-  propone por defecto es tu `configUsuario.json` y, si no, la «origen» del
-  JSON (en ese prompt solo va la RUTA: para opciones como `--destino` o
-  `--extensiones`, usa `ejecutar`). Lo mismo con la orden `uv run cliWork menu`.
+  órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones). La
+  carpeta que propone por defecto es la «origen» del JSON (si la acción no
+  tiene, la escribes). Lo mismo con la orden `uv run cliWork menu`; para
+  simular u otras opciones, `ejecutar`.
 - `uv run cliWork ejecutar NOMBRE [CARPETA|URL] [--simular] [--si] ...` — ejecuta.
 - `uv run cliWork comprobar-ia` — comprueba la conexión con el servidor de IA.
 - `uv run cliWork indexar CARPETA` — convierte solo los PDF que falten.
@@ -43,19 +43,8 @@ desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
 ## Cambiar carpetas y filtros sin tocar el código
 
 Todo lo que varía por persona (carpetas de origen/destino, extensiones,
-patrones, antigüedad…) vive en un fichero de acciones. El tuyo es
-**`mis-acciones.json`**: se crea solo (al instalar o al primer uso) con las
-acciones del empaquetado y en él pones tus opciones de destino, origen y
-extensiones por acción. Ese fichero **manda sobre el JSON de la distribución**.
-
-- Sin `--config`: tu fichero personal manda (no hace falta escribir la ruta):
-
-```powershell
-uv run cliWork ejecutar ordenar-descargas --simular
-uv run cliWork validar
-```
-
-- Con `--config <ruta>`: otro fichero (p. ej. uno que copies de otro equipo):
+patrones, antigüedad…) vive en el JSON. Con la opción global `--config` se usa
+otro fichero de acciones en vez del empaquetado, sin tocar el código:
 
 ```powershell
 uv run cliWork --config C:\ruta\mis-acciones.json validar
@@ -135,8 +124,27 @@ Las acciones de tipo `resumir` mandan el texto de cada fichero (.txt, .md o
 .pdf) al modelo con las `instrucciones` de la acción y escriben
 `<nombre>.resumen.md` en `destino` (o junto al fichero). La configuración del
 proveedor (compatible con la API de OpenAI) va en el `.env`, nunca en el
-código: `CENTRO_IA_URL`, `CENTRO_IA_KEY`, `CENTRO_IA_MODELO`, `CENTRO_IA_CA`
-(mira `.env.example`). `max_caracteres` (500–50000, por defecto 12000) acota el
+código: `CENTRO_IA_URL`, `CENTRO_IA_KEY`, `CENTRO_IA_MODELO`, `CENTRO_IA_CA`.
+
+**Dónde está la plantilla**: en la raíz del repositorio, con el nombre
+**`.env.example`** (fichero oculto que empieza por un punto). Para configurar la
+IA:
+
+```bash
+cp .env.example .env        # Linux / macOS
+copy .env.example .env     # Windows (cmd)
+```
+
+Después rellena `.env` con tus valores (URL, clave y modelo; si no tienes, usa
+los comentarios de la plantilla para casa o el servidor del centro). **`.env`
+NO se sube a git** (está en `.gitignore`); la plantilla `.env.example` sí se
+sube, porque no lleva claves.
+
+Si ya exportas estas variables en tu terminal (`export`/`setx), no hace falta el
+`.env`. Tras cambiar `.env` NO hay que reinstalar ni reiniciar nada: la CLI lo
+lee en cada ejecución (`uv run cliWork comprobar-ia` para ver si va bien).
+
+`max_caracteres` (500–50000, por defecto 12000) acota el
 texto que se envía; `categorias` limita las respuestas del modelo a esa lista.
 
 - `renombrar-ia` pide al modelo un nombre corto (2-6 palabras, minúsculas,
