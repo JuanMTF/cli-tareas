@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import typer
 import unicodedata
 import webbrowser
 import zipfile
@@ -23,6 +24,7 @@ from typing import Any, Callable, Literal
 
 from tareas import config as mod_config
 from tareas import html as mod_html
+from tareas import usuario as mod_usuario
 from tareas.errores import ConfigError, TareasError
 from tareas.ia import ProveedorIA
 
@@ -238,8 +240,14 @@ class Accion(ABC):
         raise NotImplementedError
 
     def _destino(self) -> Path:
-        """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino)."""
-        return Path(self.config.get("destino") or ".").expanduser()
+        """Carpeta destino expandiendo ~ (o la raíz actual si no tiene destino).
+
+        Prioridad (ADR-0014): TU configUsuario.json manda sobre la del JSON
+        (mismo repo, rutas distintas por ordenador); la opción de la CLI
+        sigue encima de ambas vía _destino_final().
+        """
+        destino = mod_usuario.destino_defecto() or self.config.get("destino")
+        return Path(destino or ".").expanduser()
 
     def _origen(self) -> Path:
         """Carpeta origen expandiendo ~."""
@@ -1086,7 +1094,9 @@ class EstadoPC(Accion):
                 frec = psutil.cpu_freq()
                 if frec:
                     lineas.append(f"frecuencia actual {frec.current:.0f} MHz")
-            except (NotImplementedError, OSError):
+            except (AttributeError, NotImplementedError, OSError):
+                # psutil no tiene cpu_freq en todos los SO (p. ej. macOS): se
+                # dice «no disponible» igual que en el resto de sensores.
                 pass
             partes.append("; ".join(lineas))
             if carga >= float(umbrales.get("cpu_pct", 101)):
@@ -1179,6 +1189,126 @@ class EstadoPC(Accion):
 
         # Multilínea: la CLI lo pinta como tabla (una medida por fila).
         return "\n".join(partes)
+
+
+@Accion.registrar("ip-conf")
+class IpConfig(Accion):
+    """Configura la red del equipo: lista adaptadores, se selecciona, y se
+    pide IP, máscara, puerta y DNS (con default 8.8.8.8 si no se escribe).
+
+    Interactiva como «estado-pc»: no usa IA ni carpeta ni ficheros (el
+    adaptador se elige en la propia ejecución y los valores se escriben en el
+    sistema con comandos de red por SO). Con --simular NO escribe nada: solo
+    lista y describe lo que se haría.
+    """
+
+    def ejecutar(
+        self,
+        ficheros: list[Path],
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> list[Resultado]:
+        if simular:
+            return [
+                Resultado(
+                    None,
+                    None,
+                    "simulado",
+                    "SIMULACIÓN: leería los adaptadores de red, elegiría uno y "
+                    "pediría IP, máscara, puerta y DNS (8.8.8.8 por defecto) para "
+                    "configurarlo.",
+                )
+            ]
+        adaptadores = self._listar_adaptadores()
+        if not adaptadores:
+            return [Resultado(None, None, "hecho", "No se encontró ningún adaptador de red.")]
+        for numero, adaptador in enumerate(adaptadores, start=1):
+            typer.echo(f"{numero}) {adaptador['nombre']}: {adaptador['info']}")
+        seleccion = self._pedir_numero("Adaptador a configurar", len(adaptadores))
+        if seleccion is None:
+            return [Resultado(None, None, "cancelado", "Cancelado: no se configuró nada.")]
+        adaptador = adaptadores[seleccion - 1]
+        nombre = adaptador["nombre"]
+        ip = (typer.prompt(f"IP de «{nombre}»") or "").strip()
+        mascara = (typer.prompt(f"Máscara de «{nombre}»") or "").strip()
+        puerta = (typer.prompt(f"Puerta (gateway) de «{nombre}»") or "").strip()
+        dns = (typer.prompt("DNS1 (Enter = 8.8.8.8)", default="8.8.8.8", show_default=False) or "8.8.8.8").strip()
+
+        comando = self._comando_aplicar(nombre, ip, mascara, puerta, dns)
+        completado = subprocess.run(comando, capture_output=True, text=True, check=False)
+        if completado.returncode != 0:
+            raise TareasError(f"No se pudo aplicar la configuración de red: {completado.stderr.strip()}")
+        return [
+            Resultado(
+                None,
+                None,
+                "hecho",
+                f"Red configurada en «{nombre}»: IP {ip}/{mascara}, puerta {puerta}, DNS {dns}.",
+            )
+        ]
+
+    def _pedir_numero(self, texto: str, maximo: int) -> int | None:
+        while True:
+            try:
+                entrada = typer.prompt(texto, default="", show_default=False).strip()
+            except (typer.Abort, KeyboardInterrupt, EOFError):
+                return None
+            if entrada == "":
+                return None
+            try:
+                numero = int(entrada)
+            except ValueError:
+                typer.echo(f"Aviso: «{entrada}» no es un número.")
+                continue
+            if numero == 0:
+                return None
+            if 1 <= numero <= maximo:
+                return numero
+            typer.echo(f"Aviso: el número va del 1 al {maximo}.")
+
+    def _comando_aplicar(
+        self, nombre: str, ip: str, mascara: str, puerta: str, dns: str
+    ) -> list[str]:
+        if sys.platform == "win32":
+            return [
+                "netsh",
+                "interface",
+                "ip",
+                "set",
+                "addresses",
+                nombre,
+                "static",
+                ip,
+                mascara,
+                puerta,
+                dns,
+            ]
+        if sys.platform == "darwin":
+            return ["networksetup", "-setmanual", nombre, ip, mascara, puerta, dns]
+        return ["ip", "addr", "add", nombre, "dev", nombre, f"{ip}/{mascara}"]
+
+    def _listar_adaptadores(self) -> list[dict[str, str]]:
+        import psutil
+
+        adaptadores: list[dict[str, str]] = []
+        for nombre, direcciones in psutil.net_if_addrs().items():
+            info = ", ".join(f"{d.address}/{d.netmask}" for d in direcciones if d.address) or "sin direccion"
+            adaptadores.append({"nombre": nombre, "info": info})
+        return adaptadores
+
+    def aplicar(
+        self,
+        fichero: Path,
+        n: int,
+        simular: bool,
+        urls: list[str] | None = None,
+        abrir: Callable[[list[str]], None] | None = None,
+        destino: Path | None = None,
+    ) -> Resultado:
+        """No se usa: «ip-conf» trabaja con el sistema, no por fichero."""
+        raise NotImplementedError("ip-conf no trabaja por ficheros.")
 
 
 def leer_texto(fichero: Path, tope: int) -> str:
@@ -1383,7 +1513,13 @@ def a_nombre_seguro(texto: str) -> str:
     )
     limpio = re.sub(r"[^a-z0-9-]+", "-", sin_tildes.lower())
     limpio = re.sub(r"-{2,}", "-", limpio).strip("-")
-    return limpio[:60].rstrip("-")
+    limpio = limpio[:60].rstrip("-")
+    # Invariante anti-inyección (aserción de desarrollo): de aquí NUNCA sale
+    # una ruta. Si saliera sería un bug del limpiado (error del programador,
+    # no del usuario) y en desarrollo se rompe aquí mismo, no más tarde al
+    # mover ficheros.
+    assert "/" not in limpio and "\\" not in limpio
+    return limpio
 
 
 class _AccionMovimientoIA(AccionIA):
@@ -1541,6 +1677,9 @@ class Clasificar(_AccionMovimientoIA):
                 f"(el modelo respondió «{respuesta_texto}» y no es una de: "
                 f"{', '.join(categorias)}) "
             )
+        # Invariante (aserción de desarrollo): la carpeta la decide el JSON,
+        # nunca el modelo — solo una categoría de la lista o sin-clasificar.
+        assert carpeta.name == "sin-clasificar" or carpeta.name in categorias
         libre = destino_libre(carpeta / fichero.name)
         carpeta.mkdir(parents=True, exist_ok=True)
         shutil.move(str(fichero), str(libre))

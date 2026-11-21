@@ -1,6 +1,6 @@
 [project]
 name = "tareas"
-version = "0.1.0"
+version = "1.0.0"
 description = "Automatiza tareas repetitivas con ficheros desde la terminal"
 readme = "README.md"
 authors = [
@@ -27,3 +27,10 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.2.0",
 ]
+
+[tool.pytest.ini_options]
+# Temporal propio: el árbol numerado de Windows (pytest-of-<usuario>/pytest-current)
+# queda con ACLs podadas y pytest se cae AL FINAL (todos los tests en verde) en
+# cleanup_dead_symlinks. Con --basetemp no hay directorios numerados ni enlace,
+# y pytest borra este directorio al empezar cada sesión.
+addopts = "--basetemp=.pytest-tmp"

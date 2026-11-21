@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-11-04
-- Autor/a: [Juan Manuel Tudo ]
+- Autor/a: Juan Manuel Tudo
 
 ## Contexto
 
@@ -35,7 +35,12 @@ lee, valida y ejecuta ese fichero. Añadir una acción = editar el JSON.
      el coloreado de TOML es menos común en editores básicos que el de
      JSON; sería una decisión «por afinidad con uv», no por necesidad.
 ]
-3. [Otra que se te ocurra o que te propusiera la IA]
+3. INI con configparser (stdlib, sin dependencias).
+   - A favor: formato de toda la vida en Windows; nada que instalar.
+   - En contra: configparser no tiene listas nativas y cada acción lleva
+     varias (filtro.extensiones, categorias, urls...): habría que inventar
+     una convención de valores separados por comas encima de un formato
+     que ya se queda pequeño para los campos de las acciones IA.
 
 ## Consecuencias
 

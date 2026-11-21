@@ -13,13 +13,13 @@ Al terminar cada paso, escribe la fecha entre paréntesis.
 - [X] paso-5 (comando)
 - [X] paso-6 (subagente revisor 11-11-2026)
 - [X] paso-7 (ADR)
-- [ X] paso-8 (commits)
+- [x] paso-8 (commits)
 
 ## Secciones extra de la guía
 
-- [ X] #metodo — método de trabajo
-- [ X] #checklist — checklist del profesor (repasar al final)
-- [ X] #rubrica — rúbrica de evaluación
+- [x] #metodo — método de trabajo
+- [x] #checklist — checklist del profesor (repasar al final)
+- [x] #rubrica — rúbrica de evaluación
 - [X] #despues — qué hacer después
 
 ## Notas

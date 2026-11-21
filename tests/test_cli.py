@@ -10,10 +10,13 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from tareas import acciones as mod_acciones
+from tareas import config as mod_config
 from tareas.cli import app
 
 runner = CliRunner()
-RUTA_REAL = Path("src/tareas/docs/acciones.json")
+# Ruta absoluta del JSON empaquetado (anclada al paquete): los tests no
+# dependen del cwd (el aislado de conftest lo mueve al tmp_path).
+RUTA_REAL = mod_config.RUTA_ACCIONES
 
 
 def _texto(resultado) -> str:
@@ -796,6 +799,7 @@ def test_mensaje_vacio_explica_el_filtro(tmp_path: Path) -> None:
 
 def test_menu_aparece_en_la_ayuda() -> None:
     resultado = runner.invoke(app, ["--help"])
+    assert resultado.exit_code == 0, _texto(resultado)
     assert "menu" in _texto(resultado)
 
 
@@ -910,8 +914,11 @@ def test_tabla_simulacion_rutas_con_virgulilla(tmp_path: Path) -> None:
     assert "Todo dentro de" in texto  # el pie de tabla aparece con su ruta
 
 
-def test_estado_pc_se_pinta_como_tabla(tmp_path: Path) -> None:
+def test_estado_pc_se_pinta_como_tabla(tmp_path: Path, monkeypatch) -> None:
     """`ejecutar estado-pc` pinta el informe como tabla con los AVISO dentro."""
+    # CPU fija con un doble: la medida es real (muestra de 0,5 s) y en una
+    # máquina ociosa —un runner de CI— puede quedar en 0% y no haber aviso.
+    monkeypatch.setattr("psutil.cpu_percent", lambda interval=None: 42.0)
     config_ruta = tmp_path / "acciones.json"
     config_ruta.write_text(
         json.dumps(
@@ -975,3 +982,52 @@ def test_menu_no_pregunta_carpeta_a_estado_pc(tmp_path: Path) -> None:
     texto = _texto(resultado)
     assert "Carpeta de origen" not in texto  # no se pregunta carpeta
     assert "Estado del equipo" in texto  # y el informe se ejecuta (solo lectura)
+
+
+# --- Códigos de salida, de 0 a 4 (sesión 4) ----------------------------------
+#
+# La promesa de la CLI: cada tipo de problema tiene SU código de salida y
+# ningún mensaje da traceback. 0 = bien · 1 = error del motor (TareasError)
+# · 2 = mal uso de la CLI (lo corta typer/click) · 3 = ConfigError ·
+# 4 = IANoDisponible. Estas cinco pruebas usan las fixtures del conftest.
+
+
+def test_codigo_0_todo_va_bien(tmp_path: Path, runner, texto) -> None:
+    """El caso feliz: listar una carpeta que existe sale con 0."""
+    carpeta = tmp_path / "vacia"
+    carpeta.mkdir()
+    resultado = runner.invoke(app, ["listar", str(carpeta)])
+    assert resultado.exit_code == 0, texto(resultado)
+
+
+def test_codigo_1_accion_inexistente(runner, texto) -> None:
+    """TareasError del motor: la acción no está en el JSON → 1, sin traceback."""
+    resultado = runner.invoke(app, ["ejecutar", "no-existe"])
+    assert resultado.exit_code == 1, texto(resultado)
+    assert "Traceback" not in texto(resultado)
+
+
+def test_codigo_2_mal_uso_de_la_cli(runner) -> None:
+    """Opción desconocida: typer/click corta con 2 ANTES de llegar al motor."""
+    resultado = runner.invoke(app, ["--no-existe"])
+    assert resultado.exit_code == 2
+
+
+def test_codigo_3_json_roto(tmp_path: Path, runner, texto) -> None:
+    """ConfigError: el JSON no se puede leer → 3, con mensaje humano."""
+    roto = tmp_path / "roto.json"
+    roto.write_text("{esto no es json", encoding="utf-8")
+    resultado = runner.invoke(app, ["validar", str(roto)])
+    assert resultado.exit_code == 3, texto(resultado)
+    assert "Traceback" not in texto(resultado)
+
+
+def test_codigo_4_sin_config_de_ia(runner, texto, env_sin_ia) -> None:
+    """IANoDisponible: sin URL ni clave → 4, con el aviso de las acciones sin IA."""
+    resultado = runner.invoke(app, ["comprobar-ia"])
+    assert resultado.exit_code == 4, texto(resultado)
+    salida = texto(resultado)
+    assert "Faltan CENTRO_IA_URL" in salida
+    assert "las acciones sin IA siguen funcionando" in salida
+    assert "Traceback" not in salida
+    assert "SECRETA" not in salida  # no hay clave que enseñar, y se demuestra

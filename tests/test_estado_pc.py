@@ -41,7 +41,8 @@ def test_el_tipo_pasa_la_validacion(tmp_path: Path) -> None:
 
 
 def test_esta_registrado_en_el_json_real() -> None:
-    acciones = cargar_acciones(Path("src/tareas/docs/acciones.json"))
+    # Ruta absoluta del JSON empaquetado: no depende del cwd del test.
+    acciones = cargar_acciones(mod_config.RUTA_ACCIONES)
     assert any(accion.get("tipo") == "estado-pc" for accion in acciones)
 
 
@@ -120,8 +121,15 @@ def test_avisos_mal_puestos_se_rechazan(avisos: object) -> None:
     assert "avisos" in str(exc.value)
 
 
-def test_aviso_cuando_se_supera_el_umbral() -> None:
-    """Umbral 1%: CPU, memoria y discos lo pasan siempre → salen AVISO."""
+def test_aviso_cuando_se_supera_el_umbral(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Umbral 1%: CPU, memoria y discos lo pasan → salen AVISO.
+
+    La CPU se fuerza con un doble: la medida es REAL (cpu_percent de una
+    muestra de 0,5 s) y en una máquina ociosa —un runner de CI, p. ej.—
+    puede quedar en 0% y el aviso no saldría. Aquí se comprueba que el
+    AVISO se pinta, no la carga del equipo.
+    """
+    monkeypatch.setattr("psutil.cpu_percent", lambda interval=None: 42.0)
     accion = EstadoPC(_config_avisos({"cpu_pct": 1, "memoria_pct": 1, "disco_pct": 1}))
     mensaje = accion.ejecutar([], False)[0].mensaje
     assert "AVISO: CPU al" in mensaje

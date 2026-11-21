@@ -1082,4 +1082,725 @@ revisar código ajeno no es copiarlo: se toma la IDEA buena (un solo
 sitio que convierte excepción en salida limpia) y se deja fuera el
 detalle que no aplica (su nombre de programa, su punto de inyección).
 
+## 17-11-2026 · Los dos fallos reales del modelo en las acciones IA
 
+Los dos tropiezos de la semana 3 que faltaban por apuntar: la línea del
+examen y la categoría que no existía. Los ficheros (acciones.json)
+quedaron corregidos ANTES de su primer commit, así que en el historial
+no se ve el fallo: aquí queda el cómo y el porqué.
+
+### Prompt 13
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+instrucciones de resumir-apuntes v1: «Resume en 5 viñetas como máximo.
+Al final añade una sección "Para el examen" con lo más importante.»
+
+**Qué corregí del plan:**
+la línea «Para el examen:» salía VACÍA: al pedir una "sección", el
+modelo a veces la dejaba sin rellenar o la mezclaba con las viñetas.
+Instrucciones v2 (la commiteada): «Acaba con una línea que empiece por
+«Para el examen:» y diga, en una frase, lo que más cuenta.» — prefijo
+literal y formato cerrado.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+la v1 entera: una "sección" deja el formato al aire; con el prefijo
+literal la salida se puede comprobar (¿empieza por «Para el examen:»?).
+
+**Funcionaba a la primera:**
+no: dos pasadas más hasta la v2; con ella la línea sale siempre.
+
+**Qué aprendí:**
+para un formato exacto, la instrucción debe contener el prefijo literal
+y cerrar la forma («una línea», «en una frase»): un hueco abierto
+("sección", "añade al final") el modelo lo puede dejar vacío.
+
+### Prompt 14
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+clasificar-descargas v1 con categorías «facturas, apuntes, manuales».
+Con un calendario escolar el modelo contestó «sistemas»: una carpeta que
+no estaba en la lista.
+
+**Qué corregí del plan:**
+dos barreras: (1) el mensaje del sistema cierra la respuesta («Responde
+SOLO con una de estas opciones: ...», lo añade AccionIA.preguntar con
+las categorías del JSON) y (2) la categoría «otros» como salida de
+escape: lo que no es factura, apuntes ni manual tiene a dónde ir.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+rechacé «que se cree la carpeta que diga el modelo»: cualquier respuesta
+rara crearía carpetas sueltas. El código compara la respuesta con la
+lista (tolerando tildes y mayúsculas) y lo que no encaja va a
+sin-clasificar/: la carpeta la decide el JSON, nunca el modelo.
+
+**Funcionaba a la primera:**
+no: el calendario acabó en «sistemas» con la v1; con la v2 (lista
+cerrada + «otros») cae en «otros/», y la comparación en Python lo
+garantiza aunque el modelo se salga de la lista.
+
+**Qué aprendí:**
+al modelo se le da una lista cerrada Y una opción de escape: sin escape
+responde cualquier cosa; y sin validación en el código, también. Las dos
+barreras juntas (instrucción + comparación en el código) son las que
+impiden que se invente ni una carpeta.
+
+## 17-11-2026 · Sesión 4: tests reorganizados, CI y versión 1.0.0
+
+### Prompt 15
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+reorganiza los tests de la semana 4: tests/conftest.py con las fixtures
+compartidas (CliRunner, JSON de acciones, dobles del proveedor IA y el
+entorno con/sin CENTRO_IA_*), test_config.py con 8 pruebas de validación,
+test_acciones.py con 6 de comportamiento de las clases, test_ia.py con 9
+SIN red (httpx simulado) y 5 de códigos de salida 0..4 en test_cli.py.
+
+**Qué corregí del plan:**
+tres pruebas mías empezaron mal y el propio pytest me lo dijo: supuse que
+cargar_acciones validaba el esquema de cada acción, pero ese es el
+contrato de validar_acciones/validar_ia (las que usa la orden validar),
+y max_caracteres fuera de rango no devuelve avisos: LEVANTA
+AccionNoValida. Reescritos a su nivel real; el resto, a la primera.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no migrar todos los usos de runner/_texto de test_cli.py a las fixtures:
+son ~40 funciones que funcionan; los tests NUEVOS usan las fixtures y los
+antiguos quedan como están (migración gradual, no reescribir por gusto).
+
+**Funcionaba a la primera:**
+no: los 3 tropiezos de arriba; corregidos, 156 tests en verde.
+
+**Qué aprendí:**
+cada función tiene su CONTRATO y el test se escribe contra el contrato,
+no contra la suposición (cargar ≠ validar; avisos ≠ excepción). Y la
+suite sin red se consigue con dobles en conftest: httpx.Response
+fabricado + monkeypatch de httpx.post, así CI no necesita ninguna clave.
+
+### La instalación comprobada de verdad (Prompt 16)
+
+**Prompt del plan (agente Build):**
+pyproject.toml a 1.0.0, CHANGELOG.md por semana, README con «instalar con
+una orden» (uv tool install), .github/workflows/pruebas.yml en los tres
+sistemas y scripts/revisar.sh que lanza opencode run en solo lectura.
+
+**Qué corregí del plan:**
+al probar la instalación descubrí que .env.example NO estaba en git: el
+.gitignore ignoraba también el example (línea «.env.example»), así que el
+criterio de la semana 3 estaba a medias. Quitado del .gitignore (con
+comentario de que la plantilla SIN claves sí se sube) y añadido al index.
+
+**Funcionaba a la primera:**
+sí: uvx --from . cliWork version → cliWork 1.0.0, con el paquete
+construido e instalado efímero (34 paquetes, numpy incluido por psutil).
+
+**Qué aprendí:**
+«documentado» no basta si git no sube el fichero: la prueba de un criterio
+es git log -- fichero. Y la versión no es cambiar un número: es la
+etiqueta, el CHANGELOG y la batería (que comprueba «version imprime
+1.0.0») diciendo lo mismo.
+
+## 17-11-2026 · Los 4 fallos del modo interactivo que no eran fallos
+
+### Prompt 17
+**Herramienta:** OpenCode (modelo DeepSeek V4.1 Flash Free)
+
+**Prompt del plan (agente Build):**
+pego la salida de la batería en modo interactivo: acaba con 4 «Marcado
+FALLO por el auditor» y hay que solucionarlos antes de seguir. Antes de
+tocar código, comprueba tú mismo si esos 4 fallos son reales o del propio
+test, y después documenta el arreglo en prompts.md y en un ADR.
+
+**Qué corregí del plan:**
+los 4 marcados eran exactamente los 4 pasos cuyo resultado BUENO es un
+error rojo (validar con JSON roto y con max_caracteres fuera de rango, y
+sus dos «no ensena traceback»). La CLI estaba bien: la batería completa
+dio 48/48 y -SoloSimular 23/23. El fallo era la pregunta «¿A la vista, ha
+salido OK?»: quien acaba de ver un «Error:» en rojo contesta «n» y se
+apunta un fallo inexistente. Añadido `-ErrorEsperado` a esos pasos (avisan
+de que el rojo es lo esperado), la pregunta pasa a «¿La salida es la
+esperada?» y el resumen final lista los pasos fallidos por su nombre.
+Documentado en ADR-0012.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no quitar la pregunta en los pasos de error esperado ni darlos por buenos
+sin preguntar: se perdería la revisión humana de que el mensaje rojo se
+lee bien. Tampoco separé contadores (pasos/fallos/auditor): más números
+para la misma información; con el nombre en el resumen basta.
+
+**Funcionaba a la primera:**
+no: mi primera hipótesis fue que los 4 fallos eran de código (modelo
+saturado, sandbox sucio); la batería no interactiva los descartó. La
+pista estaba en la propia salida pegada: los 4 «n» caían en los pasos del
+JSON roto.
+
+**Qué aprendí:**
+un veredicto humano mal formulado es un falso positivo del propio test:
+la pregunta tiene que decir qué es lo esperado, no solo «¿OK?». Y un
+resumen que solo cuenta fallos no sirve para arreglarlos: con el nombre
+del paso se localiza al instante (y cabe en el issue o en el ADR).
+
+
+## 17-11-2026 · Andamiaje de los tests: aislamiento total del equipo real
+
+### Prompt 18
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+Hazlo según el plan, empezando solo por el andamiaje:
+- uv add --dev pytest
+- tests/conftest.py con:
+  · aislado (autouse): monkeypatch.chdir(tmp_path), HOME y USERPROFILE a
+    tmp_path y fuera CENTRO_IA_URL, CENTRO_IA_KEY y CENTRO_IA_CA;
+  · descargas: tmp_path/Descargas con factura.pdf, «apuntes de
+    redes.docx», FOTO1.JPG, «cumpleaños 2.png» y viejo.tmp con 40 días
+    (os.utime);
+  · escribir_config: escribe un acciones.json y devuelve su ruta;
+  · ProveedorFalso(ProveedorIA) y la fixture modelo_falso.
+Termina con: uv run pytest, luego rellena prompts.md y adr siguiendo la
+plantilla.
+
+**Qué corregí del plan:**
+el andamiaje existía a medias: pytest ya estaba en el grupo dev
+(uv add --dev pytest solo sincronizó la .venv) y el conftest ya traía
+escribir_config, los proveedores dobles y env_con_ia/env_sin_ia de la
+sesión 4. Añadí lo que faltaba: aislado (autouse), descargas y
+ProveedorFalso/modelo_falso, sin borrar las fixtures que ya usan los 9
+ficheros de test. Dos tropiezos reales que el andamiaje destapó:
+(1) el aislado rompió 5 tests que leían el JSON empaquetado con ruta
+RELATIVA («src/tareas/docs/acciones.json») — cambiados a
+config.RUTA_ACCIONES, que es absoluta porque se ancla a __file__; y
+(2) pytest se caía AL FINAL (con los 156 tests en verde) limpiando
+el árbol numerado de Windows: el enlace «pytest-current» de
+%TEMP%\pytest-of-juant queda con ACLs podadas y cleanup_dead_symlinks
+revienta con PermissionError; solucionado con --basetemp=.pytest-tmp en
+pyproject (sin directorios numerados ni enlace; el directorio se vacía
+al empezar cada sesión y va al .gitignore).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no reescribí el conftest desde cero: las fixtures existentes tienen
+~40 funciones de test encima y funcionan (migración gradual, como el
+Prompt 15). Tampoco intenté reparar las ACLs del pytest-of-juant
+borrando %TEMP%: no es borrable sin admin y el basetemp lo esquiva
+de raíz.
+
+**Funcionaba a la primera:**
+no: primera pasada 151/156 (los 5 de la ruta relativa) y el crash de
+limpieza; tras RUTA_ACCIONES + basetemp, 156 passed en 11 s, código 0.
+
+**Qué aprendí:**
+una fixture autouse que cambia el cwd es una promesa que hay que
+cumplir en TODA la suite: cualquier ruta relativa que quede es una
+bomba (y la encontró al momento). Y que la ruta de un recurso
+empaquetado se deriva SIEMPRE del módulo (RUTA_ACCIONES), nunca del
+directorio actual: es el mismo motivo por el que la CLI admite ~ y
+carpetas con espacios. El error de pytest que no mira los tests
+(un crash en el teardown) se distingue porque los verdes ya están
+contados: si los 156 pasan y aun así sale código 1, el fallo es del
+herraje, no del código.
+
+### Prompt 19
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+TE paso el conftest del profe (semana 4: la fixture aislado como «la
+pared», descargas con los ficheros feos y escribir_config a medida)
+revisalo y comprueba que el nuestro está ok.
+
+**Qué corregí del plan:**
+auditoría comparada. aislado: idéntico al del profe (chdir, HOME,
+USERPROFILE y fuera CENTRO_IA_URL/KEY/CA con raising=False) — nada que
+cambiar. descargas: equivalente (mismos 5 ficheros feos y os.utime a 40
+días). escribir_config: NO cumplía el contrato del profe — la nuestra
+hacía json.dumps de lo que sea, así que un string «roto» se convertía
+en JSON válido (un string entrecomillado) y no valía para probar JSON
+rotos. Adoptado el suyo: LISTA → envuelve en {"version": 1, "acciones":
+[...]}, TEXTO → tal cual; se mantuvo el dict completo tal cual (los 4
+usos actuales de test_config.py pasan dicts) y el ensure_ascii=False
+(las tildes son parte de la prueba).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no copiar su escribir_config tal cual sin más: habría roto los 4 tests
+existentes (pasan un dict completo y el suyo lo envolvería como si
+fuera la lista de acciones). Se adoptó el contrato (str/list) sin
+romper el actual (dict).
+
+**Funcionaba a la primera:**
+sí: 156 tests en verde tras el cambio, sin tocar ningún test.
+
+**Qué aprendí:**
+una fixture de «fábrica» se define por su CONTRATO (qué acepta), no por
+su implementación: el profe la pensó para JSON rotos (texto tal cual) y
+yo para dicts completos; la buena acepta los dos. Y «json.dumps de lo
+que sea» es una trampa: un string pasa a ser JSON válido y la prueba
+del error desaparece sin darte cuenta.
+
+### Prompt 20
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+para configurar las opciones por defecto de cada usuario he pensado que
+cuando se instale todo se cree también configUsuario.json y ahí salgan
+las opciones que se puedan cambiar como origen, destino, si pide
+autorización (con exclamación de atención en los comandos de borrar) y
+las extensiones. También explícalo bien en readme.md y actualiza los
+prompts y el ADR. (Respuestas de diseño: manda lo que el usuario
+DEFINA —si no, acciones.json, porque tiene 3 ordenadores con rutas de
+red distintas y Linux—; extensiones aplicadas a los filtros sin las
+suyas pero modificables por orden para el día puntual; fichero en
+~/.cliWork creado al primer uso.)
+
+**Qué corregí del plan:**
+módulo nuevo src/tareas/usuario.py: ruta() calculada EN LA LLAMADA
+(Path.home(), no al importar) para que el sandbox aislado siga
+valiendo; preparar() crea el fichero con valores VACÍOS y _ayuda en
+español dentro; cargar() valida (campos desconocidos, tipos) y sale
+con ConfigError (código 3) si está roto, reutilizando _mensaje_json de
+config.py. Prioridades en motor.ejecutar (origen: --carpeta > tu
+fichero > JSON > «.») y Accion._destino (tu fichero > JSON; la CLI
+sigue encima por _destino_final). Nueva opción --extensiones/-x
+(normalizar_extensiones: comas/espacios, punto se añade solo; inyectada
+SOLO en filtros sin «extensiones»). Confirmaciones en cli.py:
+pedir_confirmacion = usuario.confirmar_por_defecto(); borrar SIEMPRE
+pregunta tras imprimir «⚠ ATENCIÓN». Menú: defecto = tu origen primero.
+16 tests nuevos en tests/test_usuario.py (escritos sobre aislado,
+descargas y escribir_usuario local). Versión 1.1.0 (SemVer minor):
+pyproject, __init__, README, CHANGELOG, pruebas.ps1.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- inyectar las extensiones del usuario en TODOS los filtros: rompería
+  los que traen las suyas a propósito (clasificar-descargas); solo
+  entran donde falta, y el día puntual se resuelve con --extensiones.
+- crear el fichero con valores llenos (~/Descargas etc.): si el
+  usuario no cambió nada debería mandar acciones.json, no un defecto
+  que se disfraza de decisión del usuario; vacío = «no cambiar nada».
+- un comando preparar-config para crear el fichero: quien no sabe
+  programar puede no enterarse; se crea solo al primer uso (y borrarlo
+  lo regenera).
+- mi primer test de «usuario roto» usaba estado-pc: nunca llega a la
+  rama de ficheros del motor y no lee tu fichero (exit 0); reescrito
+  con una acción mover --carpeta --simular. Y la aserción del nombre
+  del fichero fallaba porque Rich parte la palabra en líneas; se
+  aserta el texto estable («no es JSON»).
+
+**Funcionaba a la primera:**
+no: faltó importar Path en usuario.py (NameError en los 16), la _ayuda
+no contiene el nombre del fichero que asertaba un test, y borrar exige
+su campo «confirmar» en el JSON (CAMPOS_POR_TIPO) — el test lo llevaba
+sin él y salía código 3 por validación, no por el fichero roto. Tres
+ajustes y 172 en verde.
+
+**Qué aprendí:**
+un fichero «por usuario y ordenador» es la tercera capa de config (CLI
+> usuario > JSON) y la que hace portable el repo sin tocar el
+compartido; pero su poder tiene que ser EXPLÍCITO: vacío = no cambia
+nada, y lo destructivo (borrar) no se silencia desde el fichero. En
+tests, que una acción llegue a leer TU config no depende del tipo de
+acción: los tipos IA/estado ni la miran — hay que llegar a la rama de
+ficheros del motor. Y en aserciones sobre salida de Rich, mejor un
+texto estable que un token que puede partirse entre líneas.
+
+## 19-11-2026 · Auditar fixtures contra la guía: resumir gana camino feliz
+
+### Prompt 21
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+revisa el escribir_config y la tabla «las fixtures, y quién las pide»
+de la guía de la sesión 4 contra mis tests reales; después: modifica el
+código y soluciona los posibles fallos, y repórtalo en prompts.md y en
+un ADR según sus plantillas.
+
+**Qué corregí del plan:**
+primero la auditoría (con ejecución, no solo leyendo): (1) ejecuté el
+escribir_config del profe sobre MIS datos y salió doble envoltura
+({"version":1,"acciones":{"version":1,…}}) porque mis tests le pasan
+dicts y él solo envuelve listas — rompería test_carga_un_json_correcto
+y test_acepta_tildes_y_utf8, y haría pasar test_version_distinta y
+test_acciones_no_lista por el MOTIVO EQUIVOCADO; además su
+ensure_ascii=True escribe tildes como \u00e1 (comprobado por bytes:
+ASCII puro) y el test de tildes dejaría de probar UTF-8. Veredicto: NO
+sustituir, nuestro fixture es un superconjunto compatible. (2) La
+tabla del profe describe su suite de 28 tests, no la mía de 172:
+descargas solo la pide test_usuario (en test_cli «descargas» son
+nombres de acción), y modelo_falso/ProveedorFalso era CÓDIGO MUERTO
+nadie lo pedía; le faltaban además 7 fixtures que sí uso (runner,
+texto, accion_abrir, proveedor_que_contesta, proveedor_que_rompe,
+env_sin_ia, env_con_ia) — los 32 errors del experimento anterior eran
+justo esos. Cambios de código: (a) test_resumir_escribe_el_resumen con
+modelo_falso (camino feliz que no existía: estado hecho, el .resumen.md
+se escribe con la respuesta y la cabecera, y el <documento> viaja en la
+pregunta); (b) test_resumir_simular_no_pregunta_al_modelo con
+proveedor_que_rompe inyectado; (c) test_codigo_3_json_roto deja de
+pedir escribir_config (la firma la pedía y nunca la llamaba).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- sustituir escribir_config por el del profe: rompe 2 tests y desvirtúa
+  2 (arriba); su contrato es para SU suite de listas, el nuestro para
+  la convención de dicts de test_config.py. No se copia un fixture sin
+  mirar quién lo llama.
+- adaptar mis 4 tests para que encajen con el suyo (pasarles lista):
+  cambiaría tests para que encaje un fixture ajeno, al revés.
+- borrar modelo_falso por no usado: el ejemplo de la guía
+  (test_resumir_con_un_modelo_falso) necesita el doble que GRABA
+  preguntas y sin él no se afirma que el documento viaje bien formado;
+  mejor darle uso que eliminarlo.
+- reescribir la tabla de la guía: es material del profesor, no del
+  repo; la realidad queda documentada en el ADR-0015.
+
+**Funcionaba a la primera:**
+sí: los 2 tests nuevos en verde y la firma limpia, 174 passed in
+15.65 s, sin tocar src/ (solo tests y docs).
+
+**Qué aprendí:**
+un fixture se audita por su CONTRATO y por QUIÉN lo llama, no por cómo
+se ve: el del profe es correcto para su suite y tuyo para la tuya, y lo
+que rompe es la diferencia de convención (lista vs dict). La tabla de
+quién pide qué es un mapa de la suite del profe, no la tuya: cuando
+difieran, manda el grep sobre tests/. Y «código muerto en conftest» se
+descubre igual que en src/: una fixture sin ningún test que la pida no
+protege nada — o le escribes su test (aquí el camino feliz de resumir,
+que además era un hueco de la rúbrica) o la quitas. Añadido: un test
+que pide una fixture y no la llama es ruido que hay que limpiar en la
+misma pasada.
+
+## 19-11-2026 · Paso 3 a mano: romper Mover.preparar y verlo en rojo
+
+### Prompt 22
+**Herramienta:** el usuario a mano (mutación y restauración) + GLM-5.3-Flash
+Free OpenCode solo para recoger el informe
+
+**Prompt (paso 3 de la sesión 4, hecho sin agente):**
+«rompe en `src/tareas/acciones.py`, en la clase Mover, quítale el mkdir y
+pasa el test: tiene que salir en rojo» (consigna del profesor). El alumno
+hace la mutación a mano, mira el rojo y luego restaura con `git restore`.
+
+**Qué corregí del plan:**
+no hay plan de agente que corregir: la mutación ES el paso. Sí conviene
+anotar la forma exacta que tomó: se quitó el `.mkdir` de la línea y no la
+línea entera, así que quedó `self._destino_final(destino)(parents=True,
+exist_ok=True)` y el fallo salió como `TypeError: 'WindowsPath' object is
+not callable` (`acciones.py:390`) en vez de una carpeta destino que no se
+crea. Para el objetivo del paso da igual (la línea está protegida y el
+rojo se ve); de hecho el TypeError es imposible de no ver.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+el único diff era la mutación (una línea) y se deshizo enseguida con
+`git restore src/tareas/acciones.py` (lo hizo el usuario): el commit
+previo se llamaba literalmente «guardado antes de paso 3», así que
+restaurar solo quitó el rojo. Regla aplicada en vivo: nunca se commitea
+con el código roto.
+
+**Funcionaba a la primera:**
+sí: el rojo salió a la primera. **7 tests en rojo** de 174:
+- `test_cli.py::test_menu_propone_la_carpeta_del_json` (falla por
+  `exit_code` 1 en vez de 0: la excepción llega hasta el CLI);
+- `test_usuario.py`: `test_tu_origen_manda_sobre_el_del_json`,
+  `test_tu_destino_manda_sobre_el_del_json`, `test_sin_nada_tuyo_manda_el_json`,
+  `test_tus_extensiones_entran_en_filtros_sin_extensiones`,
+  `test_la_opcion_de_la_cli_manda_sobre_todo`,
+  `test_tus_extensiones_no_tochan_los_filtros_que_traen_las_suyas`.
+La batería (`pruebas/ejecutartareas.bat`, opción 1) lo confirmó por su
+cuenta: **48 pasos, 4 fallos** — el paso de pytest y los 3 de `mover`
+real (primera vuelta, segunda vuelta y nombre repetido). Tras restaurar:
+174 passed otra vez.
+
+**Qué aprendí:**
+- La mutación solo se coló en el lado REAL: `--simular` siguió en verde
+  porque el `if not simular` salta la línea. O sea: esta línea la
+  protegen las pruebas de movimiento real (las 7 de arriba), no las de
+  simulación; si algún día se borra `preparar()` entero, el verde de
+  `--simular` no avisa de nada.
+- La batería lo vivió igual: el paso «mover --simular NO mueve nada (ni
+  mkdir)» siguió en OK con el código roto mientras los 3 de mover real
+  se caían. Verde en una ejecución roja no es garantía de nada: hay que
+  mirar QUÉ cubre cada prueba.
+- 167 pruebas siguieron verdes: la mayoría de la suite es ortogonal a
+  esa línea. El rojo es un mapa de protección: te dice exactamente qué
+  tests cuidan una línea concreta (aquí, 7 de 174).
+- Un `TypeError` en `preparar` no se convierte en mensaje humano (en la
+  CLI real sería un traceback): otra razón para que esa línea tenga sus
+  pruebas, y para no inventar errores fuera de `TareasError`.
+- Comprobado en vivo el orden del método: romper → ver rojo → anotar →
+  restaurar → verificar verde. Sin el commit previo, `git restore`
+  habría sido arriesgado (se habrían borrado los cambios sin commitear).
+
+## 19-11-2026 · Tests de IA sin red ni tokens: el checklist completo queda cubierto
+
+### Prompt 23
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+ahora tests/test_ia.py, sin red y sin gastar un token: `a_nombre_seguro` con
+parametrize (tildes y signos, «../../etc/passwd», un nombre que el modelo
+devuelve con «.pdf» y la respuesta vacía); resumir con modelo_falso (escribe el
+.md y la pregunta lleva `<documento>`); `--simular` no pregunta al modelo
+(falso.preguntas vacía); una categoría que no está en la lista va a
+sin-clasificar; sin clave → IANoDisponible; con `http://127.0.0.1:9/v1` → «No
+llego». No cambies src/. Termina con: `uv run pytest -v`.
+
+**Qué corregí del plan:**
+la auditoría (leí test_ia.py, test_acciones_ia.py y el fixture `modelo_falso`
+del conftest): el checklist ya se cumplía casi entero; los dos huecos eran (a)
+la **respuesta vacía** del modelo (`a_nombre_seguro("") → ""`, sin test) y (b)
+el **fallo de red con la URL muerta** (`http://127.0.0.1:9/v1` → ConnectError →
+«No llego»). Los demás ya estaban cubiertos: resumir con `modelo_falso`
+escribe el `.md` y la pregunta lleva `<documento>`; `--simular` no pregunta
+(lo blindé con `modelo_falso.llamadas == []`); sin-clasificar ya existe;
+sin clave ya da `IANoDisponible`.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: solo se añadieron/afinaron tests (en tests/, nunca src/).
+
+**Funcionaba a la primera:**
+sí: 176 passed in 14.93 s con el checklist completo.
+
+**Qué aprendí:**
+la capa IA ya venía testeada sin red ni tokens; lo nuevo de esta revisión es
+dequé se decide cómo probar (fake) y cómo defender (rechazo) sin tocar src/.
+
+### Prompt 24
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+el profe ha enviado su versión de los tests de la capa IA (sin red, sin token):
+ProveedorFalso con `preguntas`, `test_limpieza` parametrizado (tildes y signos,
+ruta peligrosa, extensión, vacía), `test_resumir_con_un_modelo_falso` con
+`Motor([...]).ejecutar(...)`, `test_simular_no_pregunta_al_modelo`,
+`test_categoria_rara_va_a_sin_clasificar`, `test_sin_clave_no_hay_ia` y
+`test_sin_red_el_mensaje_es_humano`. Revísalo, ve qué hemos cambiado y habrá
+que reflejarlo en prompts.md y en un ADR según sus plantillas.
+
+**Qué corregí del plan:**
+revisión de los snippets contra la implementación: (1) fake del profe (fábrica
+con respuesta por llamada + `preguntas`) vs el nuestro (instancia + `llamadas`
+con (sistema, usuario, max_tokens)): compatible para lo que se afirma
+(`<documento>` en la pregunta), contratos distintos; se mantiene el nuestro.
+(2) Caso ruta peligrosa: el profe esperaba sanitizado (`etc-passwd`); el repo
+rechaza (`""`) — barrera anti-inyección ya blindada; se mantiene el rechazo.
+(3) Resumir con `Motor` + destino y sin-clasificar: equivalentes a tests ya
+existentes.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- adoptar el sanitizado en vez de rechazar: descartado (cambio de decisión sobre
+  código con invariant anti-inyección y tests).
+- copiar el fake del profe: descartado (contrato fábrica vs instancia).
+
+**Funcionaba a la primera:** sí: 176 passed en verde con el checklist cubierto.
+
+**Qué aprendí:**
+la capa IA ya venía testeada sin red ni tokens; lo nuevo de esta revisión es
+dequé se decide cómo probar (fake) y cómo defender (rechazo) sin tocar src/.
+
+## 19-11-2026 · Tests de la CLI con CliRunner: paso 5 del profe
+
+### Prompt 25
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+ahora tests/test_cli.py con typer.testing.CliRunner: una prueba por código de
+salida (0 ayuda, 1 acción inexistente, 2 opción inexistente, 3 JSON roto y sin
+traza, 4 IA sin clave y el aviso «siguen funcionando»). Comprueba exit_code y
+una frase corta de r.output. Termina con: `uv run pytest -v`.
+
+**Qué corregí del plan:**
+el paso ya estaba implementado: los tests de salida 0-4 (`test_codigo_0_todo_va_bien`,
+`_1_accion_inexistente`, `_2_mal_uso_de_la_cli`, `_3_json_roto`,
+`_4_sin_config_de_ia`) ya existían y pasaban, y el 4 ya comprobaba el aviso
+«las acciones sin IA siguen funcionando». Sólo se afiló el caso 0: el del
+`--help` (`test_menu_aparece_en_la_ayuda`) ahora comprueba `exit_code == 0`
+además de la frase.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno nuevo: los cinco tests de código de salida ya estaban y eran verdes.
+
+**Funcionaba a la primera:**
+sí: verde con el ajuste.
+
+**Qué aprendí:**
+la promesa de la CLI (cada problema con su código de salida) ya estaba con su
+test; el ajuste fino (exit 0 en la ayuda) cerró el checklist del paso 5.
+
+## 19-11-2026 · Los tests del profe para las salidas de la CLI (0-4) se comparan
+
+### Prompt 26
+**Herramienta:** GLM-5.3-Flash Free OpenCode
+
+**Prompt del plan (agente Build):**
+el profe ha enviado sus tests de salida con CliRunner: `test_json_roto_sale_con_3_y_sin_traza`
+(`--config` con JSON roto → validar → 3, «no es JSON válido»),
+`test_accion_que_no_existe_sale_con_1` (`--config` con borrar → ejecutar → 1),
+`test_opcion_que_no_existe_sale_con_2` (`listar --inventada` → 2) y
+`test_ia_sin_clave_sale_con_4` (`--config` con resumir → ejecutar → 4, «siguen
+funcionando»). Revísalo, compara con los nuestros y actualiza el ADR.
+
+**Qué corregí del plan:**
+revisión de los snippets contra los tests del repo: los cinco códigos (0-4) ya
+tenían su test con `exit_code` + frase y sin traceback donde aplica; los del
+profe son formulaciones alternativas (vía `--config` con JSON temporal y acción
+concreta). Frase distinta: profe «no es JSON válido» vs repo «JSON inválido en
+{ruta} (línea X, columna Y)…». Decisiones: mantener la suite actual.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- sustituir los tests por los del profe: descartada (redundante / cambio de
+  estilo ajeno).
+- cambiar la frase del test 3 al del profe: descartada (la nuestra es más rica:
+  incluye línea y columna).
+
+**Funcionaba a la primera:** sí: 176 passed en verde con el checklist de salidas cubierto.
+
+**Qué aprendí:**
+una misma promesa (código de salida 0-4) puede probarse por caminos distintos;
+lo importante es que el código y la frase se comprueben.
+
+## 20-11-2026 · Push rechazado (PAT sin scope `workflow`) y batería completa en verde
+
+### Prompt 27
+**Herramienta:** terminal (git push y batería) · GLM-5.3-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+hago `git push` para subir el workflow de GitHub Actions (paso-6) y me
+rechaza el push: `! [remote rejected] Sesion-4 -> Sesion-4 (refusing to
+allow a Personal Access Token to create or update workflow
+.github/workflows/pruebas.yml without workflow scope)`. Además paso la
+batería completa (`pruebas/ejecutartareas.bat`, opción 1): 48 pasos,
+0 fallos.
+
+**Qué corregí del plan:**
+el push no es un fallo del código: es la PAT de GitHub sin el scope
+`workflow`, el que permite subir cambios en `.github/workflows/`. Arreglo:
+GitHub → Settings → Developer settings → Personal access tokens → editar
+la PAT → marcar `workflow` → volver a hacer push. La batería salió verde
+entera: `uv run pytest` → **176 passed**, y las 48 comprobaciones en OK
+(incluidas las 2 de error previsto, que piden «s»).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: no se tocó código ni el workflow; solo falta reintentar el push
+con la PAT ampliada.
+
+**Funcionaba a la primera:**
+la batería, sí (48/48); el push, no (scope del token, no del repo).
+
+**Qué aprendí:**
+subir un workflow a GitHub exige el scope `workflow` en la PAT: sin él,
+el push se rechaza aunque el resto del repo suba bien. Y la batería
+completa (nuestra) es la prueba final antes de dar un paso por bueno:
+aquí confirmó 176 pruebas y 0 fallos antes de tocar CI.
+
+## 20-11-2026 · CI rojo en los tres sistemas: sin logs, diagnóstico por anotaciones
+
+### Prompt 28
+**Herramienta:** terminal + web (API de GitHub) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+el paso-6 está en rojo: la ejecución de GitHub Actions falla en las 3
+máquinas («Process completed with exit code 1» en `uv run pytest`, con
+`uv sync` bien) y no se puede leer el log (GitHub pide iniciar sesión).
+Arregla el CI y deja documentado el proceso.
+
+**Qué corregí del plan:**
+no era el entorno ni las dependencias: dos tests
+(`test_aviso_cuando_se_supera_el_umbral` y
+`test_estado_pc_se_pinta_como_tabla`) exigían «AVISO: CPU al» con
+umbral 1% contra la CPU MEDIDA de verdad (`psutil.cpu_percent(interval=0.5)`):
+en el escritorio de casa siempre hay fondo (≥1%), pero en una VM ociosa
+de GitHub Actions esa muestra de 0,5 s sale 0,0% → el aviso no se pinta →
+assert rojo en ubuntu, windows y macos a la vez. Arreglo: doble de
+`psutil.cpu_percent` fijado a 42% con `monkeypatch` (el test comprueba
+que el AVISO se pinta, no la carga del equipo). Además, el workflow sube
+`checkout` v4→v7 y `setup-uv` v5→v10.3.3 (los 3 avisos de Node.js 20
+desaparecen) y añade un paso `if: failure()` que convierte cada
+`FAILED`/`ERROR` en una anotación roja de la ejecución.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: solo se tocaron los 2 tests (con su explicación dentro) y el
+workflow; el código de `src/` no se toca.
+
+**Funcionaba a la primera:**
+la API de anotaciones de GitHub (se lee sin sesión:
+`GET /repos/.../check-runs/{id}/annotations`) y la auditoría de los
+tests; en cambio el log (`/actions/jobs/{id}/logs`) devuelve 403 sin
+token, y el `--basetemp` de prueba fuera del repo no reprodujo el fallo
+(en local siempre hay CPU de sobra).
+
+**Qué aprendí:**
+los logs de GitHub Actions exigen autenticación; las anotaciones no —
+por eso el paso nuevo: la próxima ejecución dirá ella sola qué test
+falla, sin copiar nada. Y una regla para siempre: ningún `assert` debe
+depender de una medida viva de la máquina (CPU, memoria, red) si un
+umbral puede cruzarla de milagro: el valor se fija con un doble.
+
+## 20-11-2026 · Diagnóstico definitivo del CI: ANSI en el error de `-t` y psutil en macOS
+
+### Prompt 29
+**Herramienta:** terminal + web (API de GitHub) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+tras el push de la ronda anterior (workflow con paso de anotaciones), las
+ejecuciones salieron ROJAS de nuevo y la API de anotaciones dio los tests
+fallidos: `test_opcion_inexistente_en_espanol` (en las 3 SO) y, en macOS,
+el `AttributeError: module 'psutil' has no attribute 'cpu_freq'`.
+
+**Qué corregí del plan:**
+- `src/tareas/acciones.py`: el `except` del `psutil.cpu_freq` ahora también
+  captura `AttributeError` (en macOS psutil no lo implementa): el informe
+  del equipo ya no se cae ahí y dice «frecuencia no disponible».
+- `tests/test_traduccion.py`: `_texto` quita el ANSI (`\x1b[...[m`) antes de
+  comparar: con color activo la opción del error se pinta (`\x1b[1;32m-t\x1b[0m`)
+  y la frase se parte.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+ninguno: se arreglaron el fichero de acciones y el `_texto` del test.
+
+**Funcionaba a la primera:**
+repro `FORCE_COLOR=1` → el output con color replica fielmente el del CI
+(fallo por ANSI) y el caso sin color (falla localmente nunca). `psutil`
+en macOS desde el propio error.
+
+**Qué aprendí (reglas nuevas):**
+- un `assert` sobre texto pegado no aguanta códigos de color ANSI: se
+  normaliza antes de comparar (y el color es cosa de consola real, no del
+  texto);
+- psutil no implementa `cpu_freq` en todos los SO: el código debe capturar
+  también `AttributeError`.
+
+**Resultado (20-11-2026):** la ejecución 3 (run `44828400986`, commit
+`a37e647`) salió **SUCCESS en las 3 máquinas** (macos, windows, ubuntu):
+los dos fixes estaban completos (ANSI en el test y `cpu_freq` en macOS).
+
+**Pendiente:** **NONE** — el paso-6 queda cerrado: CI en verde en los 3 SO.
+
+## 21-11-2026 · Nueva acción `ip-conf`: configurar red por adaptador
+
+### Prompt 30
+**Herramienta:** terminal · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+nueva acción `ip-conf`: listar los adaptadores de red del equipo, que se
+seleccione uno, y pedir IP, máscara y puerta (gateway) y DNS1 (con default
+8.8.8.8 si no se escribe).
+
+**Qué corregí del plan:**
+- tipo «ip-conf» añadido a `TIPOS_CONOCIDOS` y a `CAMPOS_POR_TIPO` (vacío:
+  la acción es interactiva como «estado-pc», no lleva campos de fichero);
+- subclase `IpConfig` registrada con `@Accion.registrar("ip-conf")`;
+- dispatch en `motor.py` (igual que «estado-pc») y exclusión de carpeta en
+  el menú de `cli.py`.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- ninguno: arranque del build de la acción.
+
+**Qué aprendí (reglas nuevas):**
+- una acción que escribe en el SISTEMA (no en ficheros) sigue el molde de
+  «estado-pc»/«limpiar-usb»: sin carpeta, y con `--simular` que no escribe.
+
+**Resultado (21-11-2026):** build completado: `IpConfig` con listado de
+adaptadores (psutil), selección numerada, prompts de IP/máscara/puerta/
+DNS (default 8.8.8.8) y comandos de red por SO (netsh/networksetup/ip).
+Tests nuevos (`tests/test_ipconf.py`): validación, registro, simulación y
+listado → **181 passed** en suite completa; smoke CLI con `--simular` OK.
+
+**Pendiente:** commit del build (lo hace el responsable) y, si procede, PR de
+la rama de release.

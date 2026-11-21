@@ -24,6 +24,7 @@ from rich.table import Table
 import tareas
 from tareas import config
 from tareas import html as mod_html
+from tareas import usuario
 from tareas.acciones import (
     ErrorConfiguracion,
     NAVEGADORES,
@@ -747,7 +748,7 @@ def ejecutar(
             "--carpeta",
             "-c",
             "-r",
-            help="Carpeta de origen; tiene prioridad sobre la del fichero de acciones. Admite ~.",
+            help="Carpeta de origen; manda sobre tu configUsuario.json y sobre el fichero de acciones. Admite ~.",
         ),
     ] = None,
     si: Annotated[
@@ -774,7 +775,7 @@ def ejecutar(
         typer.Option(
             "--destino",
             "-d",
-            help="Carpeta de destino; tiene prioridad sobre la del fichero de acciones. Admite ~.",
+            help="Carpeta de destino; manda sobre tu configUsuario.json y sobre el fichero de acciones. Admite ~.",
         ),
     ] = None,
     nombre_zip: Annotated[
@@ -785,6 +786,19 @@ def ejecutar(
             help=(
                 "«comprimir»: nombre del .zip (por defecto, el de la carpeta origen). "
                 "«renombrar»: nombre genérico para el hueco {base} (por defecto, Captura)."
+            ),
+        ),
+    ] = None,
+    extensiones: Annotated[
+        str | None,
+        typer.Option(
+            "--extensiones",
+            "-x",
+            help=(
+                "Solo ficheros con estas extensiones, separadas por comas o "
+                "espacios (ej.: --extensiones .pdf,.jpg; el punto se añade "
+                "solo). Para el día concreto en que solo quieres unos cuantos: "
+                "manda sobre el JSON y sobre tu configUsuario.json."
             ),
         ),
     ] = None,
@@ -804,6 +818,11 @@ def ejecutar(
     navegador = pedidos[0] if pedidos else None
     destino_navegador = NAVEGADORES[navegador] if navegador else "el explorador por defecto"
     ruta_navegador = buscar_navegador(navegador) if navegador else None
+
+    # --extensiones llega como texto («pdf, .JPG»): se normaliza una sola vez.
+    lista_extensiones = (
+        usuario.normalizar_extensiones(extensiones) if extensiones else None
+    )
 
     try:
         lista = config.cargar(_ruta_config(ctx))
@@ -864,6 +883,7 @@ def ejecutar(
                 antiguedad=antiguedad,
                 destino=Path(destino).expanduser() if destino else None,
                 nombre_zip=nombre_zip,
+                extensiones=lista_extensiones,
             )
         except TareasError as exc:
             fallo(exc)
@@ -872,18 +892,26 @@ def ejecutar(
         return
 
     # --simular ya ha salido arriba; aquí solo falta no preguntar si se pidió --si.
+    # Tu configUsuario.json puede apagar las confirmaciones de las acciones con
+    # «confirmar» (confirmar: false), pero las destructivas (borrar) SIEMPRE
+    # preguntan, con su aviso ⚠: borran de verdad, no hay papelera (ADR-0014).
+    pedir_confirmacion = usuario.confirmar_por_defecto()
     if not si:
-        if tipo == "abrir":
+        if tipo == "borrar":
+            consola_err.print(
+                f"[yellow]⚠ ATENCIÓN:[/yellow] la acción «{escape(nombre)}» "
+                "BORRA ficheros de verdad (no hay papelera)."
+            )
+            typer.confirm(f"¿Ejecutar «{nombre}» (borrar)?", abort=True)
+        elif tipo == "abrir":
             urls_efectivas = (
                 [url] if url is not None else list(accion.config.get("urls") or [])
             )
             pestañas = "1 pestaña" if len(urls_efectivas) == 1 else f"{len(urls_efectivas)} pestañas"
-            if accion.config.get("confirmar", False):
+            if accion.config.get("confirmar", False) and pedir_confirmacion:
                 typer.confirm(f"¿Abrir {destino_navegador} con {pestañas}?", abort=True)
-        else:
-            # Borrar siempre pide confirmación; el resto, solo si «confirmar» es true.
-            if tipo == "borrar" or accion.config.get("confirmar", False):
-                typer.confirm(f"¿Ejecutar «{nombre}» ({tipo})?", abort=True)
+        elif accion.config.get("confirmar", False) and pedir_confirmacion:
+            typer.confirm(f"¿Ejecutar «{nombre}» ({tipo})?", abort=True)
 
     try:
         resultados = motor.ejecutar(
@@ -901,6 +929,7 @@ def ejecutar(
             antiguedad=antiguedad,
             destino=Path(destino).expanduser() if destino else None,
             nombre_zip=nombre_zip,
+            extensiones=lista_extensiones,
         )
     except TareasError as exc:
         fallo(exc)
@@ -974,7 +1003,10 @@ def _bucle_menu(ctx: typer.Context) -> None:
                 escape(str(accion.get("descripcion", ""))),
             )
         consola.print(tabla)
-        consola.print("[dim]0 = salir · para simular u otras opciones: cliWork ejecutar NOMBRE[/dim]")
+        consola.print(
+            "[dim]0 = salir · para simular u otras opciones (--destino, "
+            "--extensiones...): cliWork ejecutar NOMBRE[/dim]"
+        )
 
         numero = _pedir_numero(
             "Número de acción (0 = salir)", len(filas), vacio_termina=True
@@ -987,20 +1019,24 @@ def _bucle_menu(ctx: typer.Context) -> None:
         tipo = str(accion.get("tipo", ""))
 
         carpeta: str | None = None
-        if tipo not in ("abrir", "limpiar-usb", "estado-pc"):
-            # «abrir» va con URLs, «limpiar-usb» con el registro y
-            # «estado-pc» lee el equipo: ninguno usa carpeta de origen,
-            # así que no se pregunta.
+        if tipo not in ("abrir", "limpiar-usb", "estado-pc", "ip-conf"):
+            # «abrir» va con URLs, «limpiar-usb» con el registro, «estado-pc»
+            # y «ip-conf» trabajan con el equipo (leer o configurar): ninguno
+            # usa carpeta de origen, así que no se pregunta.
             origen_json = str(accion.get("origen") or "").strip()
-            # El defecto visible es la carpeta «origen» del JSON (expandida):
-            # Intro lanza la acción donde su autor la configuró. Sin origen
-            # en el JSON, no hay defecto: hay que escribir la carpeta.
-            defecto_carpeta = str(Path(origen_json).expanduser()) if origen_json else ""
+            # El defecto visible: TU configUsuario.json manda sobre la
+            # «origen» del JSON (igual que en ejecutar, ADR-0014); sin
+            # ninguna de las dos, no hay defecto: hay que escribirla.
+            defecto_carpeta = usuario.origen_defecto() or (
+                str(Path(origen_json).expanduser()) if origen_json else ""
+            )
             texto_carpeta = (
                 f"Carpeta de origen (Intro = {defecto_carpeta})"
                 if defecto_carpeta
                 else "Carpeta de origen (el JSON no tiene: escríbela)"
             )
+            # Solo la RUTA: las opciones (-d, -x...) van en «cliWork ejecutar».
+            texto_carpeta = f"{texto_carpeta} · solo la ruta"
             respuesta = _pedir_texto(texto_carpeta, defecto=defecto_carpeta)
             if respuesta is None:
                 return
@@ -1025,16 +1061,17 @@ def _bucle_menu(ctx: typer.Context) -> None:
             # La orden ya ha escrito su error (o el usuario ha cancelado con
             # la N del confirm): el menú sigue vivo.
             pass
-
-        if _pedir_texto("Intro para volver al menú") is None:
-            return
+        # Sin pausa: al terminar la acción (o su error, que queda impreso
+        # arriba) se vuelve AL MOMENTO al menú; solo «0» o Ctrl+C salen.
 
 
 @app.command(
     epilog=(
         "Lo lanzas igual con la opción global: cliWork --menu. Ejecuta la "
-        "acción elegida (con sus confirmaciones); para --simular, navegador "
-        "o carpetas distintas, teclea la orden: cliWork ejecutar NOMBRE ..."
+        "acción elegida (con sus confirmaciones) y VUELVE al menú al acabar; "
+        "solo «0» o Ctrl+C salen. Para --simular, navegador o carpetas y "
+        "opciones concretas (--destino, --extensiones...), teclea la orden: "
+        "cliWork ejecutar NOMBRE ..."
     )
 )
 def menu(ctx: typer.Context) -> None:

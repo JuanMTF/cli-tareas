@@ -27,19 +27,23 @@ param(
 $ErrorActionPreference = "Continue"
 $fallos = 0
 $pasos = 0
+# Nombres de los pasos que fallan: el resumen final los repite para no tener
+# que buscar los "FALLO" en rojo entre 48 lineas.
+$listaFallos = @()
 
 # La CLI escribe UTF-8 (validas, SIMULACION...): hay que decirle a PowerShell
 # como leerlo, o los acentos salen mojados y los regex del test no casan.
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 
 function Paso {
-    param([string]$Nombre, [bool]$Ok, [string]$Detalle = "")
+    param([string]$Nombre, [bool]$Ok, [string]$Detalle = "", [switch]$ErrorEsperado)
     $script:pasos++
     if ($Ok) {
         Write-Host ("  OK   {0}" -f $Nombre) -ForegroundColor Green
         if ($Detalle) { Write-Host ("       {0}" -f $Detalle) -ForegroundColor DarkGray }
     } else {
         $script:fallos++
+        $script:listaFallos += $Nombre
         Write-Host ("  FALLO {0}" -f $Nombre) -ForegroundColor Red
         if ($Detalle) { Write-Host ("       {0}" -f $Detalle) -ForegroundColor Yellow }
     }
@@ -49,12 +53,20 @@ function Paso {
     # parar, mirar el sandbox y responder; un "n" convierte el paso en fallo.
     # La pregunta va con Write-Host: con stdin redirigido el prompt de
     # Read-Host no se pinta y la pregunta desapareceria.
+    #
+    # OJO con los pasos -ErrorEsperado: su salida BUENA es un error rojo (JSON
+    # roto, max_caracteres fuera de rango). Sin el aviso, el auditor responde
+    # "n" a lo que esperaba ver y se apunta un fallo que no existe.
     if ($Ok -and $script:Interactivo) {
-        Write-Host "       A la vista, ha salido OK? (s/n) [s] " -ForegroundColor Cyan -NoNewline
+        if ($ErrorEsperado) {
+            Write-Host "       (el error rojo de arriba ES lo esperado en este paso)" -ForegroundColor DarkGray
+        }
+        Write-Host "       La salida es la esperada? (s/n) [s] " -ForegroundColor Cyan -NoNewline
         $veredicto = Read-Host
         if ($veredicto -match '^[nN]') {
             $script:fallos++
-            Write-Host "       Marcado FALLO por el auditor" -ForegroundColor Yellow
+            $script:listaFallos += ("{0} (auditor)" -f $Nombre)
+            Write-Host "       Verdadero FALLO segun el auditor (la maquina decia OK)" -ForegroundColor Yellow
         }
     }
 }
@@ -113,7 +125,7 @@ Paso "pytest pasa los tests" ($LASTEXITCODE -eq 0) $detallePytest
 Write-Host "[2] Ordenes basicas"
 
 $v = Tareas @("version")
-Paso "version imprime 0.1.0" (($v.Codigo -eq 0) -and ($v.Texto -match "0\.1\.0")) $v.Texto.Trim()
+Paso "version imprime 1.0.0" (($v.Codigo -eq 0) -and ($v.Texto -match "1\.0\.0")) $v.Texto.Trim()
 
 $val = Tareas @("validar")
 Paso "validar dice 'acciones validas' y sale 0" (($val.Codigo -eq 0) -and ($val.Texto -match "v.lidas")) ($val.Texto.Trim() -split "`n")[0]
@@ -137,8 +149,8 @@ $rupta = Join-Path $env:TEMP "tareas-prueba-roto.json"
 '{"version": 1, "acciones": [' | Set-Content -Path $rupta -Encoding UTF8
 Write-Host "       (prueba prevista: el error rojo del JSON roto DEBE salir; responde 's')" -ForegroundColor DarkGray
 $roto = Tareas @("validar", $rupta)
-Paso "validar con JSON roto sale con codigo 3" ($roto.Codigo -eq 3) ("codigo = {0}" -f $roto.Codigo)
-Paso "el error no ensena traceback" (-not ($roto.Texto -match "Traceback"))
+Paso "validar con JSON roto sale con codigo 3" ($roto.Codigo -eq 3) ("codigo = {0}" -f $roto.Codigo) -ErrorEsperado
+Paso "el error no ensena traceback" (-not ($roto.Texto -match "Traceback")) -ErrorEsperado
 
 # --- 3. Sandbox -------------------------------------------------------------
 
@@ -225,8 +237,8 @@ $iaMala = Join-Path $env:TEMP "tareas-prueba-ia-mala.json"
 Set-Content -Path $iaMala -Encoding UTF8 -Value '{"version": 1, "acciones": [{"nombre": "mala-ia", "descripcion": "prueba de validacion", "tipo": "resumir", "filtro": {"extensiones": [".txt"]}, "instrucciones": "resume", "max_caracteres": 100}]}'
 Write-Host "       (prueba prevista: el error rojo de max_caracteres DEBE salir; responde 's')" -ForegroundColor DarkGray
 $iaMalaR = Tareas @("validar", $iaMala)
-Paso "validar rechaza max_caracteres fuera de rango (codigo 3)" ($iaMalaR.Codigo -eq 3)
-Paso "el error de max_caracteres no ensena traceback" (-not ($iaMalaR.Texto -match "Traceback"))
+Paso "validar rechaza max_caracteres fuera de rango (codigo 3)" ($iaMalaR.Codigo -eq 3) -ErrorEsperado
+Paso "el error de max_caracteres no ensena traceback" (-not ($iaMalaR.Texto -match "Traceback")) -ErrorEsperado
 
 if ($SoloSimular) {
     Write-Host ""
@@ -385,4 +397,8 @@ if ($SoloSimular) {
 
 Write-Host ""
 Write-Host ("=== Resumen: {0} pasos, {1} fallo(s) ===" -f $pasos, $fallos) -ForegroundColor Cyan
-if ($fallos -gt 0) { exit 1 } else { exit 0 }
+if ($fallos -gt 0) {
+    Write-Host "Pasos fallidos:" -ForegroundColor Yellow
+    foreach ($f in $listaFallos) { Write-Host ("  - {0}" -f $f) -ForegroundColor Yellow }
+    exit 1
+} else { exit 0 }

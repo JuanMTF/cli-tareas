@@ -6,6 +6,8 @@ cambia antes de que se imprima nada.
 
 from __future__ import annotations
 
+import re
+
 from typer.testing import CliRunner
 
 from tareas.cli import app
@@ -18,14 +20,17 @@ def _texto(resultado) -> str:
     """Todo lo que imprimió la orden (stdout y stderr), con espacios seguidos juntos.
 
     Los errores van a stderr y dependiendo de la versión de click pueden no
-    estar en .stdout, así que se concatenan todas las vías.
+    estar en .stdout, así que se concatenan todas las vías. El ANSI (código de
+    color) se quita: con color activo la opción del error se pinta y el texto
+    no queda plano igual.
     """
     partes = []
     for attr in ("output", "stdout", "stderr"):
         valor = getattr(resultado, attr, None)
         if isinstance(valor, str):
             partes.append(valor)
-    return " ".join(" ".join(partes).split())
+    sin_ansi = re.sub(r"\x1b\[[0-9;]*m", "", " ".join(" ".join(partes).split()))
+    return sin_ansi
 
 
 # --- diccionario y reglas ---------------------------------------------------
