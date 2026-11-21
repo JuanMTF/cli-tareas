@@ -48,6 +48,12 @@ description: Reglas del fichero acciones.json de la CLI cliWork (campos, tipos, 
     enteros del 1 al 100, validados en `config.validar()`): si lo medido llega al
     umbral, el informe acaba con líneas «AVISO: ...» (el estado sigue siendo «hecho»,
     un aviso no es un error). Sin `avisos`, ningún aviso.
+  - `ip-conf` → sin campos propios (interactiva como «estado-pc»): lista los
+    adaptadores de red del equipo (`psutil.net_if_addrs`), el usuario elige uno y
+    se le piden IP, máscara y puerta (gateway) y DNS1 (con default 8.8.8.8 si no se
+    escribe). Se aplica con comandos de red por SO (netsh en Windows, networksetup
+    en macOS, ip addr en Linux). Con `--simular` NO escribe nada: solo lista y
+    describe lo que se haría. No es acción IA.
   - `resumir` (acción IA, en `TIPOS_IA`) → requiere `filtro` e `instrucciones` (lo que se le
     pide al modelo, texto no vacío). Opcionales: `origen` (carpeta; la CLI manda con `-c`),
     `destino` (si no hay, el resumen se escribe junto al fichero), `max_caracteres` (entero

@@ -142,6 +142,13 @@ texto que se envía; `categorias` limita las respuestas del modelo a esa lista.
 - Sin IA disponible (sin clave, sin red…) la acción sale con el código 4 y el
   resto del programa sigue funcionando.
 
+## Acciones del sistema
+
+- `cliWork ejecutar ip-conf` → lista los adaptadores de red, que se seleccione
+  uno y se lean los valores para configurarlos: IP, máscara, puerta (gateway) y
+  DNS1 (con default 8.8.8.8 si no se escribe). Con `--simular` solo lista y
+  describe lo que se haría (no toca nada).
+
 ## Desarrollo
 
 - Dependencias con uv: `uv sync` (añadir: `uv add <paquete>`).
