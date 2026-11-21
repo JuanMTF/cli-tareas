@@ -27,7 +27,18 @@ def ruta_mis_acciones() -> Path:
     USERPROFILE en el momento de la llamada, así que los tests —que apuntan
     esas variables a su sandbox— no crean el fichero del usuario de verdad.
     """
-    return Path.home() / ".cliWork" / "mis-acciones.json"
+    return ruta_base_config_usuario() / "mis-acciones.json"
+
+
+def ruta_base_config_usuario() -> Path:
+    """Carpeta personal del usuario donde viven sus ficheros de configuración:
+    el .env de la capa IA y el mis-acciones.json de acciones."""
+    return Path.home() / ".cliWork"
+
+
+def ruta_env_ia() -> Path:
+    """Ruta fija del .env de la capa IA: ~/.cliWork/.env."""
+    return ruta_base_config_usuario() / ".env"
 
 
 def preparar_mis_acciones() -> Path:

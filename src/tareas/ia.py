@@ -18,6 +18,7 @@ from pathlib import Path
 import httpx
 from dotenv import find_dotenv, load_dotenv
 
+from tareas.config import ruta_env_ia
 from tareas.errores import IANoDisponible
 
 # Variables de entorno (el .env se lee con python-dotenv antes de mirarlas).
@@ -84,7 +85,7 @@ class ProveedorCentro(ProveedorIA):
         self.modelo = modelo
         if not self.modelo:
             raise IANoDisponible(
-                f"Falta {VAR_MODELO}: ponla en .env (mira .env.example), "
+                f"Falta {VAR_MODELO}: ponla en {ruta_env_ia()} (mira .env.example), "
                 "o escribe el modelo fijo del centro en MODELO_POR_DEFECTO (ia.py)."
             )
         self.ca = ca
@@ -99,15 +100,14 @@ class ProveedorCentro(ProveedorIA):
         # la instalación con `uv tool install`, que se ejecuta desde cualquier
         # carpeta). El primero que exista gana; las variables de entorno ya
         # exportadas siguen mandando (load_dotenv no pisa las que ya existen).
-        for ruta in (find_dotenv(usecwd=True), str(Path.home() / ".cliWork" / ".env")):
-            if ruta and Path(ruta).is_file():
-                load_dotenv(ruta)
-                break
+        ruta_env = ruta_env_ia()
+        if ruta_env.is_file():
+            load_dotenv(ruta_env)
         url = os.environ.get(VAR_URL)
         clave = os.environ.get(VAR_CLAVE)
         if not url or not clave:
             raise IANoDisponible(
-                f"Faltan {VAR_URL} o {VAR_CLAVE}: ponlas en .env (mira .env.example)"
+                f"Faltan {VAR_URL} o {VAR_CLAVE}: ponlas en {ruta_env} (mira .env.example)"
             )
         modelo = os.environ.get(VAR_MODELO, MODELO_POR_DEFECTO)
         return ProveedorCentro(url, clave, modelo, os.environ.get(VAR_CA))

@@ -297,6 +297,12 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   manda esa ruta; `indexar` pasa a leer el fichero efectivo. Docs: ADR-0019, Prompt 33 y
   README actualizados. `uv run pytest`: **184 passed**. Pendiente: retag `v1.0.0` corregido,
   release y reintento del install cruzado (paso-9).
+- (21-11) **Ruta fija `~/.cliWork/`**: el `.env` de IA y `mis-acciones.json` ahora
+  usan una carpeta personal fija (`~/.cliWork/`). Se documentó en `prompts.md`
+  (`Prompt 29`), `ADR-0002` y `README.md`. Con este cambio, `comprobar-ia`
+  funciona desde cualquier carpeta sin necesidad de buscar el `.env` por
+  jerarquía: el código usa `config.ruta_env_ia()` y, si no existe, avisa al
+  usuario para copiar `.env.example` a `~/.cliWork/.env`. **185 passed**.
 - (21-11) **README del día**: añadida la ubicación de la plantilla `.env.example`
   (raíz del repositorio) con el paso de copiarla como `.env`, y el ejemplo de
   ruta de repositorio + orden de desinstalación (`uv tool uninstall cliWork`).

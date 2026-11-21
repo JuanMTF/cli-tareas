@@ -34,9 +34,8 @@ Para desinstalarlo: `uv tool uninstall tareas`.
 - `uv run cliWork listar CARPETA` — tabla con el contenido de una carpeta.
 - `uv run cliWork ejecutar estado-pc` — informe del estado del equipo (CPU,
   memoria, discos, temperaturas, batería, arranque) en una tabla, con avisos
-  si algo pasa los umbrales del JSON (`avisos`: disco/memoria/CPU en %).
-  Solo lectura.
-- `uv run cliWork --menu` — menú con números para lanzar acciones sin teclear
+  si algo pasa los umbrales del JSON (`avisos`: disco/memoria/CPU en %).  Solo lectura.
+- `uv run cliWork --menu` — menú con números para lanzar acciones sin techar
   órdenes: eliges acción y ejecuta de verdad (con sus confirmaciones). La
   carpeta que propone por defecto es la «origen» del JSON (si la acción no
   tiene, la escribes). Lo mismo con la orden `uv run cliWork menu`; para
@@ -131,23 +130,23 @@ Las acciones de tipo `resumir` mandan el texto de cada fichero (.txt, .md o
 proveedor (compatible con la API de OpenAI) va en el `.env`, nunca en el
 código: `CENTRO_IA_URL`, `CENTRO_IA_KEY`, `CENTRO_IA_MODELO`, `CENTRO_IA_CA`.
 
-**Dónde está la plantilla**: en la raíz del repositorio, con el nombre
-**`.env.example`** (fichero oculto que empieza por un punto). Para configurar la
-IA:
+**Dónde está la plantilla**: en la carpeta personal `~/.cliWork/.env.example`
+(copiarla como `~/.cliWork/.env`).
 
 ```bash
-cp .env.example .env        # Linux / macOS
-copy .env.example .env     # Windows (cmd)
+cp .env.example ~/.cliWork/.env        # Linux / macOS
+copy .env.example ~/.cliWork\.env      # Windows (cmd)
 ```
 
-Después rellena `.env` con tus valores (URL, clave y modelo; si no tienes, usa
-los comentarios de la plantilla para casa o el servidor del centro). **`.env`
-NO se sube a git** (está en `.gitignore`); la plantilla `.env.example` sí se
-sube, porque no lleva claves.
+Después rellena `~/.cliWork/.env` con tus valores (URL, clave y modelo; si no
+tienes, usa los comentarios de la plantilla para casa o el servidor del
+centro). **`~/.cliWork/.env` NO se sube a git** (está en `.gitignore`); la
+plantilla `.env.example` sí se sube, porque no lleva claves.
 
 Si ya exportas estas variables en tu terminal (`export`/`setx), no hace falta el
-`.env`. Tras cambiar `.env` NO hay que reinstalar ni reiniciar nada: la CLI lo
-lee en cada ejecución (`uv run cliWork comprobar-ia` para ver si va bien).
+`.env`. Tras cambiar `~/.cliWork/.env` NO hay que reinstalar ni reiniciar nada:
+la CLI lo lee en cada ejecución (`uv run cliWork comprobar-ia` para ver si va
+bien).
 
 `max_caracteres` (500–50000, por defecto 12000) acota el
 texto que se envía; `categorias` limita las respuestas del modelo a esa lista.

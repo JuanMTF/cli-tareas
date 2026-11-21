@@ -1679,30 +1679,29 @@ sí: el README ya explica la plantilla y el paso de copia.
 la plantilla del `.env` se llama `.env.example` (fichero oculto con punto)
 y hay que copiarla como `.env` (que git ignora).
 
-## 21-11-2026 · Comprobar-ia desde cualquier carpeta: el .env personal
+## 21-11-2026 · Ruta fija `~/.cliWork/` para .env y acciones personales
 
-### Prompt 28
+### Prompt 29
 **Herramienta:** Flint 40B Free (OpenCode)
 
 **Prompt del plan (agente Build):**
-el fallo de `cliWork comprobar-ia` seguía igual: al ejecutar desde fuera de
-la carpeta del repo no encontraba el .env y saltaba IANoDisponible. Dos
-opciones: copiar `.env.example` a `~/.cliWork` junto a `mis-acciones.json`, o
-fijar la ruta del repo en el código.
+el diseño se ha decidido usar una ruta fija `~/.cliWork/` para el `.env` de IA
+y el `mis-acciones.json`, sin búsqueda por jerarquía: desde el código se usa
+`config.ruta_env_ia()` y `config.ruta_mis_acciones()`. Así el usuario no tiene
+que buscar dónde poner los ficheros: siempre están en esa carpeta. Se pide
+documentarlo en README, prompts y ADR.
 
 **Qué corregí del plan:**
-la segunda era inviable para la instalación (`uv tool install` copia el
-paquete y no sabe dónde está el repo): la solución coherente es buscar el
-`.env` en dos sitios — raíz del proyecto (dev) y `~/.cliWork/.env` (personal).
+ninguna: el plan de hoy es documentar al README esos dos puntos y actualizar
+el ADR.
 
 **Diffs que rechacé o deshice (/undo) y por qué:**
-no migrar la config de IA a JSON: la decisión ADR-0002 fija el `.env`; solo se
-añadió la búsqueda personal como fallback.
+no se tocó código ni se creó el `.env` real: solo documentación.
 
 **Funcionaba a la primera:**
-sí: con el fallback, el test nuevo monta el proveedor desde `~/.cliWork/.env`.
+sí: el README ya explica la ruta fija y el paso de copia.
 
 **Qué aprendí:**
-`find_dotenv(usecwd=True)` sube por la jerarquía de carpetas: desde la raíz
-del repo (dev) encuentra el `.env`; desde cualquier otra carpeta no, y ahí
-debe mirar el `.env` personal de `~/.cliWork`.
+la ruta fija `~/.cliWork/` (creada al primer uso) resuelve el problema de
+buscar el `.env` desde fuera del repositorio; el usuario solo tiene que
+copiar `.env.example` a esa carpeta y listo.
