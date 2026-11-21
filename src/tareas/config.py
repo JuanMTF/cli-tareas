@@ -489,14 +489,29 @@ def validar(accion: Any, indice: int, nombres_vistos: set[str]) -> list[str]:
                 f"{', '.join(desconocidos)}."
             )
 
-    # campos de texto que no pueden estar vacíos
-    for campo in ("origen", "destino", "plantilla"):
-        if campo in accion and (
-            not isinstance(accion[campo], str) or not accion[campo].strip()
-        ):
-            raise AccionNoValida(
-                accion, campo, f"«{campo}» debe ser un texto no vacío."
-            )
+    # campos de texto que no pueden estar vacíos (solo para tipos que los usan)
+    # Revisamos que el tipo actual tenga estos campos en su esquema
+    # (CAMPOS_POR_TIPO o CAMPOS_OPCIONALES_POR_TIPO); para tipos como
+    # "estado-pc" o "ip-conf" que no tienen campos propios, evitaríamos
+    # errores falsos si alguien incluyó estas claves por accidente.
+    _campos_texto_tipos = {
+        tipo
+        for tipo, campos in CAMPOS_POR_TIPO.items()
+        if "origen" in campos or "destino" in campos or "plantilla" in campos
+    }
+    _campos_texto_tipos.update(
+        tipo
+        for tipo, campos in CAMPOS_OPCIONALES_POR_TIPO.items()
+        if "origen" in campos or "destino" in campos or "plantilla" in campos
+    )
+    if tipo in _campos_texto_tipos:
+        for campo in ("origen", "destino", "plantilla"):
+            if campo in accion and (
+                not isinstance(accion[campo], str) or not accion[campo].strip()
+            ):
+                raise AccionNoValida(
+                    accion, campo, f"«{campo}» debe ser un texto no vacío."
+                )
 
     # campos que no le tocan a este tipo -> aviso, no error
     de_mas = sorted(
