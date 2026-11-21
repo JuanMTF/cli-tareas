@@ -54,6 +54,14 @@ la variable: no obliga a usar el servidor del centro.
   solo se encuentra ejecutando desde la carpeta del proyecto, porque se
   busca desde el directorio actual; en casa gasto cuota del proveedor
   público (por eso las pruebas usan `max_tokens=5`).
+
+- Documentación: la plantilla `.env.example` vive en la raíz del
+  repositorio y el README la explica (copiarla como `.env`, que git ignora);
+  sin cambio en la decisión, solo se precisó dónde está la plantilla. El
+  `.env` se busca primero en la raíz del proyecto y luego en `~/.cliWork/`
+  (config personal de la instalación), para que `comprobar-ia` funcione desde
+  cualquier carpeta.
+
 - Qué haré si cambia algo: si el centro cambia de modelo, se marca en
   `CENTRO_IA_MODELO` sin tocar código; si algún día un proveedor deja de
   ser compatible con el formato de OpenAI, entonces se planteará la

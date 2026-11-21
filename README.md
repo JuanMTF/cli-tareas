@@ -17,8 +17,13 @@ uv tool install .
 cliWork --help
 ```
 
+Por ejemplo, si lo clonas en `C:\Users\TuUsuario\Descargas\cli-tareas`, ahí
+está el proyecto (la ruta exacta depende de dónde lo clones).
+
 Para probarlo sin instalar nada: `uvx --from . cliWork --help`. Para
 desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
+
+Para desinstalarlo: `uv tool uninstall cliWork`.
 
 ## Órdenes
 

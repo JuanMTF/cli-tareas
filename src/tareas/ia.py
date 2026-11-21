@@ -93,8 +93,16 @@ class ProveedorCentro(ProveedorIA):
 
     @staticmethod
     def desde_entorno() -> ProveedorCentro:
-        """Fábrica: lee .env (si lo hay) y las variables de entorno."""
-        load_dotenv(find_dotenv(usecwd=True))  # no pisa las variables que ya existen
+        """Fábrica: lee .env (del proyecto o del usuario) y las variables de entorno."""
+        # Dos sitios donde puede vivir el .env: la raíz del proyecto (dev:
+        # `uv run` desde la carpeta del repo) y el personal (~/.cliWork, para
+        # la instalación con `uv tool install`, que se ejecuta desde cualquier
+        # carpeta). El primero que exista gana; las variables de entorno ya
+        # exportadas siguen mandando (load_dotenv no pisa las que ya existen).
+        for ruta in (find_dotenv(usecwd=True), str(Path.home() / ".cliWork" / ".env")):
+            if ruta and Path(ruta).is_file():
+                load_dotenv(ruta)
+                break
         url = os.environ.get(VAR_URL)
         clave = os.environ.get(VAR_CLAVE)
         if not url or not clave:

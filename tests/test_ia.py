@@ -9,6 +9,8 @@ IANoDisponible con mensaje humano y que la clave NUNCA aparece.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 
@@ -75,6 +77,27 @@ def test_desde_entorno_con_config_monta_el_proveedor(env_con_ia) -> None:
     proveedor = ProveedorCentro.desde_entorno()
     assert proveedor.url == "http://prueba.local/v1"
     assert proveedor.modelo == "modelo-de-prueba"
+
+
+def test_desde_entorno_busca_el_env_personal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin .env en el proyecto, el proveedor mira el .env de ~/.cliWork (instalación).
+
+    La instalación con `uv tool install` se ejecuta desde cualquier carpeta,
+    así que la config personal del usuario es ~/.cliWork/.env (igual que
+    mis-acciones.json): ahí copia .env.example cuando no haya .env del repo.
+    """
+    (tmp_path / ".cliWork").mkdir()
+    (tmp_path / ".cliWork" / ".env").write_text(
+        "CENTRO_IA_URL=http://personal.local/v1\n"
+        "CENTRO_IA_KEY=SECRETA-AUDITORIA-NO-IMPRIMIR\n",
+        encoding="utf-8",
+    )
+    # Sin .env en el proyecto (cwd fuera del repo): solo aplica el personal.
+    monkeypatch.setattr(ia, "find_dotenv", lambda *_args, **_kwargs: "")
+    proveedor = ProveedorCentro.desde_entorno()
+    assert proveedor.url == "http://personal.local/v1"
 
 
 # --- la clave, jamás impresa -------------------------------------------------

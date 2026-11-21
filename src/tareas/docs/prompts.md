@@ -1654,3 +1654,55 @@ concreta). Frase distinta: profe «no es JSON válido» vs repo «JSON inválido
 **Qué aprendí:**
 una misma promesa (código de salida 0-4) puede probarse por caminos distintos;
 lo importante es que el código y la frase se comprueben.
+
+## 21-11-2026 · README: dónde está el `.env.example` y cómo desinstalar la herramienta
+
+### Prompt 27
+**Herramienta:** Flint 40B Free (OpenCode)
+
+**Prompt del plan (agente Build):**
+mientras se revisaba el README, faltaba explicar dónde está el fichero
+`.env.example` (raíz del repositorio) y que hay que copiarlo como `.env`,
+y añadir un ejemplo de ruta de repositorio y la orden de desinstalación
+(`uv tool uninstall cliWork`).
+
+**Qué corregí del plan:**
+ninguna: el plan de hoy es documentar al README esos dos puntos.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no se tocó código ni se creó el `.env` real: solo documentación.
+
+**Funcionaba a la primera:**
+sí: el README ya explica la plantilla y el paso de copia.
+
+**Qué aprendí:**
+la plantilla del `.env` se llama `.env.example` (fichero oculto con punto)
+y hay que copiarla como `.env` (que git ignora).
+
+## 21-11-2026 · Comprobar-ia desde cualquier carpeta: el .env personal
+
+### Prompt 28
+**Herramienta:** Flint 40B Free (OpenCode)
+
+**Prompt del plan (agente Build):**
+el fallo de `cliWork comprobar-ia` seguía igual: al ejecutar desde fuera de
+la carpeta del repo no encontraba el .env y saltaba IANoDisponible. Dos
+opciones: copiar `.env.example` a `~/.cliWork` junto a `mis-acciones.json`, o
+fijar la ruta del repo en el código.
+
+**Qué corregí del plan:**
+la segunda era inviable para la instalación (`uv tool install` copia el
+paquete y no sabe dónde está el repo): la solución coherente es buscar el
+`.env` en dos sitios — raíz del proyecto (dev) y `~/.cliWork/.env` (personal).
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+no migrar la config de IA a JSON: la decisión ADR-0002 fija el `.env`; solo se
+añadió la búsqueda personal como fallback.
+
+**Funcionaba a la primera:**
+sí: con el fallback, el test nuevo monta el proveedor desde `~/.cliWork/.env`.
+
+**Qué aprendí:**
+`find_dotenv(usecwd=True)` sube por la jerarquía de carpetas: desde la raíz
+del repo (dev) encuentra el `.env`; desde cualquier otra carpeta no, y ahí
+debe mirar el `.env` personal de `~/.cliWork`.

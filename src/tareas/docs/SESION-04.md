@@ -297,3 +297,11 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   manda esa ruta; `indexar` pasa a leer el fichero efectivo. Docs: ADR-0019, Prompt 33 y
   README actualizados. `uv run pytest`: **184 passed**. Pendiente: retag `v1.0.0` corregido,
   release y reintento del install cruzado (paso-9).
+- (21-11) **README del día**: añadida la ubicación de la plantilla `.env.example`
+  (raíz del repositorio) con el paso de copiarla como `.env`, y el ejemplo de
+  ruta de repositorio + orden de desinstalación (`uv tool uninstall cliWork`).
+- (21-11) **Fix de `comprobar-ia` desde fuera del repo**: `ProveedorCentro`
+  busca el `.env` primero en la raíz del proyecto y, si no existe, en
+  `~/.cliWork/.env` (config personal, junto a `mis-acciones.json`). Con test
+  nuevo (`test_desde_entorno_busca_el_env_personal`); **185 passed**. Queda el
+  paso de re-taguear/reejecutar la release con este fix.
