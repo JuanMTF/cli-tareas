@@ -279,7 +279,7 @@ def test_indexar_carpeta_inexistente_da_1(tmp_path: Path) -> None:
 
 def test_indexar_sin_destino_ni_json_da_3(tmp_path: Path, monkeypatch) -> None:
     """Sin acción transformar en el JSON hay que indicar --destino (código 3)."""
-    monkeypatch.setattr("tareas.cli._destino_transformar", lambda: None)
+    monkeypatch.setattr("tareas.cli._destino_transformar", lambda ctx: None)
     origen = tmp_path / "origen"
     origen.mkdir()
 
@@ -294,7 +294,7 @@ def test_indexar_usa_el_destino_del_json(tmp_path: Path, monkeypatch) -> None:
     origen = tmp_path / "origen"
     destino = tmp_path / "json-destino"
     _crear_pdf(origen / "auto.pdf")
-    monkeypatch.setattr("tareas.cli._destino_transformar", lambda: destino)
+    monkeypatch.setattr("tareas.cli._destino_transformar", lambda ctx: destino)
 
     resultado = runner.invoke(app, ["indexar", str(origen)])
 

@@ -46,6 +46,8 @@ GitHub exige el scope `workflow` en la PAT para tocar ficheros bajo
    cuando algo ya ha fallado, así que la ejecución normal sigue siendo
    el workflow mínimo de arriba.
 
+6. **El PAT para `gh` necesita `read:org`**: el token usado con `gh auth login --with-token` falló con «missing required scope 'read:org'». El token `ghp_…` sí era válido (verificado contra `/user`, status 200), así que el fallo era del scope: para release/PR con `gh` hace falta un PAT clásico con `repo` + `workflow` + `read:org`.
+
 ## Alternativas consideradas
 
 1. **Caché de dependencias (`uv` cache)**: descartada por ahora — la
@@ -97,3 +99,7 @@ GitHub exige el scope `workflow` en la PAT para tocar ficheros bajo
   `44828400986`, commit `a37e647`) salió **success** en las 3 máquinas
   (macos, windows, ubuntu): los fixes de ANSI y de `cpu_freq` estaban
   completos. **Paso-6 cerrado: CI en verde en los tres sistemas.**
+- **Cuarta ronda / release v1.0.0 (21-11-2026):** la release se completó
+  (rama `release-1.0`, commit, push, PR con las tres pruebas en verde, merge,
+  tag `v1.0.0` y `gh release create` con CHANGELOG como notas); el **paso-8
+  quedó cerrado**. Pendiente: **paso-9** (instalación cruzada con otra persona).

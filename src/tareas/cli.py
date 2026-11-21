@@ -63,19 +63,20 @@ app = typer.Typer(
 def principal(
     ctx: typer.Context,
     config_ruta: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--config",
             help=(
                 "Fichero JSON de acciones. Opción GLOBAL: va justo después de "
                 "«cliWork», con su valor, y ANTES de la orden "
-                "(ej.: cliWork --config ~/mi-acciones.json validar). "
-                "Por defecto, el empaquetado. Admite ~."
+                "(ej.: cliWork --config ~/mis-acciones.json validar). Por "
+                "defecto, tu fichero personal «mis-acciones.json» (se crea solo "
+                "con las del empaquetado). Admite ~."
             ),
             show_default=False,
             metavar="",
         ),
-    ] = config.RUTA_ACCIONES,
+    ] = None,
     menu_flag: Annotated[
         bool,
         typer.Option(
@@ -88,7 +89,9 @@ def principal(
     ] = False,
 ) -> None:
     """Opciones globales de la CLI (se ponen justo después de «cliWork»)."""
-    ctx.obj = {"ruta_config": config_ruta.expanduser()}
+    ctx.obj = {
+        "ruta_config": config_ruta.expanduser() if config_ruta is not None else None,
+    }
     if menu_flag:
         if ctx.invoked_subcommand is not None:
             _error("La opción --menu se usa sola: «cliWork --menu» (o «cliWork menu»).")
@@ -137,13 +140,19 @@ def fallo(exc: TareasError) -> NoReturn:
 
 
 def _ruta_config(ctx: Any) -> Path:
-    """La ruta del fichero de acciones que guardó el callback global en ctx.obj.
+    """La ruta del fichero de acciones.
 
-    Si no hay ctx (autocompletado fuera de la CLI) o no lleva obj, se usa la
-    empaquetada.
+    Sin ``--config`` manda el fichero personal «mis-acciones.json» (se crea
+    solo con las del empaquetado); con ``--config <ruta>`` manda esa ruta.
+    Sin contexto (autocompletado fuera de la CLI) se usa la empaquetada.
     """
     obj = ctx.obj if ctx is not None and isinstance(ctx.obj, dict) else {}
-    return Path(obj.get("ruta_config") or config.RUTA_ACCIONES).expanduser()
+    ruta = obj.get("ruta_config")
+    if ruta:
+        return Path(str(ruta)).expanduser()
+    if ctx is None:
+        return config.RUTA_ACCIONES
+    return config.preparar_mis_acciones()
 
 
 def tamano_legible(n: int) -> str:
@@ -463,10 +472,10 @@ def _reiniciar_equipo() -> None:
     )
 
 
-def _destino_transformar() -> Path | None:
+def _destino_transformar(ctx: typer.Context) -> Path | None:
     """Destino por defecto de «indexar»: el de la acción transformar del JSON."""
     try:
-        acciones = config.cargar(RUTA_ACCIONES)
+        acciones = config.cargar(_ruta_config(ctx))
     except TareasError:
         return None
     for accion in acciones:
@@ -484,6 +493,7 @@ def _destino_transformar() -> Path | None:
     )
 )
 def indexar(
+    ctx: typer.Context,
     carpeta: Annotated[
         str,
         typer.Argument(
@@ -512,7 +522,7 @@ def indexar(
     galería (index.html).
     """
     origen = Path(carpeta).expanduser()
-    destino_final = Path(destino).expanduser() if destino else _destino_transformar()
+    destino_final = Path(destino).expanduser() if destino else _destino_transformar(ctx)
     if destino_final is None:
         _error(
             "No hay ninguna acción «transformar» con destino en el fichero de acciones: "
@@ -702,7 +712,8 @@ class NombresAccion:
     epilog=(
         "Opción global --config: el fichero de acciones se pasa justo después de "
         "«cliWork», con su valor, y antes de la orden "
-        "(ej.: cliWork --config ~/mi-acciones.json ejecutar ordenar-descargas --simular)."
+        "(ej.: cliWork --config ~/mis-acciones.json ejecutar ordenar-descargas --simular). "
+        "Sin --config se usa tu fichero personal «mis-acciones.json»."
     )
 )
 def ejecutar(

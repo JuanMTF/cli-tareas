@@ -52,6 +52,90 @@ def test_validar_el_fichero_real_da_0() -> None:
     assert "acciones válidas" in texto
 
 
+def test_validar_por_defecto_usa_el_fichero_personal(tmp_path: Path, monkeypatch) -> None:
+    """Sin --config, la orden valida el fichero personal mis-acciones.json."""
+    mis = tmp_path / "mis-acciones.json"
+    mis.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "mover-prueba",
+                        "descripcion": "mueve los .txt",
+                        "tipo": "mover",
+                        "origen": str(tmp_path / "Origen"),
+                        "filtro": {"extensiones": [".txt"]},
+                        "destino": str(tmp_path / "Destino"),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mod_config, "ruta_mis_acciones", lambda: mis)
+    resultado = runner.invoke(app, ["validar"])
+    assert resultado.exit_code == 0, _texto(resultado)
+    assert "1 acciones válidas" in _texto(resultado)
+
+
+def test_config_explicito_manda_sobre_el_fichero_personal(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Con --config <ruta>, manda esa ruta y no la del fichero personal."""
+    personal = tmp_path / "mis-acciones.json"
+    personal.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "mover-prueba",
+                        "descripcion": "falta el destino: es invalido",
+                        "tipo": "mover",
+                        "origen": str(tmp_path / "Origen"),
+                        "filtro": {"extensiones": [".txt"]},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    valida = tmp_path / "valida.json"
+    valida.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "acciones": [
+                    {
+                        "nombre": "mover-prueba",
+                        "descripcion": "mueve los .txt",
+                        "tipo": "mover",
+                        "origen": str(tmp_path / "Origen"),
+                        "filtro": {"extensiones": [".txt"]},
+                        "destino": str(tmp_path / "Destino"),
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    resultado = runner.invoke(app, ["--config", str(valida), "validar"])
+    assert resultado.exit_code == 0, _texto(resultado)
+    assert "acciones válidas" in _texto(resultado)
+
+
+def test_preparar_mis_acciones_crea_el_fichero(tmp_path: Path, monkeypatch) -> None:
+    """El fichero personal se crea solo (con las acciones del empaquetado)."""
+    monkeypatch.setattr(mod_config, "ruta_mis_acciones", lambda: tmp_path / "mis-acciones.json")
+    camino = mod_config.preparar_mis_acciones()
+    assert camino == tmp_path / "mis-acciones.json"
+    assert camino.is_file()
+    datos = json.loads(camino.read_text(encoding="utf-8"))
+    assert datos["version"] == 1
+    assert len(datos["acciones"]) > 0
+
+
 def test_validar_json_roto_da_3(tmp_path: Path) -> None:
     roto = tmp_path / "roto.json"
     roto.write_text("{esto no es json", encoding="utf-8")

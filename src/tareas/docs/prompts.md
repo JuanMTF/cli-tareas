@@ -1804,3 +1804,82 @@ listado → **181 passed** en suite completa; smoke CLI con `--simular` OK.
 
 **Pendiente:** commit del build (lo hace el responsable) y, si procede, PR de
 la rama de release.
+
+## 21-11-2026 · Release v1.0.0: token `gh`, scope `read:org` y tag
+
+### Prompt 31
+**Herramienta:** terminal (Git Bash + gh CLI) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+los pasos de release (`git switch -c release-1.0`, commit, push, PR, merge,
+tag, release) y el error del token: `gh auth login --with-token` falla con
+«missing required scope 'read:org'».
+
+**Qué corregí del plan:**
+- el token `ghp_…` estaba **válido** (API `/user` → 200, login `JuanMTF`); el
+  fallo era del **scope**: `gh` exige `read:org` para validar el token en
+  operaciones de release/PR.
+
+**Diffs que rechacé o deshice (/undo) y por qué:**
+- no se reutilizó el token con scope incompleto: habría fallado igual en
+  `gh release create`.
+
+**Qué aprendí (reglas nuevas):**
+- el PAT clásico se crea con scopes completos (repo, workflow, read:org); se
+  añaden al crear el token, no después.
+
+**Resultado (21-11-2026):** gh instalado, token verificado (el fallo era del
+scope `read:org`) y release **hecha por el responsable** (rama `release-1.0`,
+commit, push, PR con las tres pruebas en verde, merge, tag `v1.0.0` y
+`gh release create` con CHANGELOG como notas).
+
+**Pendiente:** paso-8 cerrado (release publicada); falta el **paso-9** (instalación
+cruzada con otra persona).
+
+## 21-11-2026 · Paso-9: instalación cruzada (la prueba de otra persona)
+
+### Prompt 32
+**Herramienta:** terminal (otra máquina) + gh CLI · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+la herramienta ya funciona en tu equipo (con `--simular` y con la acción nueva
+`ip-conf`); ahora la prueba que **otra persona** la instala desde la orden del
+README (rama/tag v1.0.0), con su propio `acciones.json` y en su propio sistema.
+
+**Qué corregí del plan:**
+- la orden de instalación ya está preparada en el README (`uv tool install
+  git+...@v1.0.0` → `cliWork version` → 1.0.0);
+- falta ejecutarla en otra máquina y registrar lo que pasa.
+
+**Resultado (21-11-2026):** plan del paso-9 escrito; instalación cruzada
+pendiente de ejecutarse.
+
+**Pendiente:** ejecutar la instalación con otra persona (parejas, mejor con
+otro sistema), probar con IA y sin red, abrir el issue si algo falla y pasar a
+v1.0.1.
+
+## 21-11-2026 · Fichero personal `mis-acciones.json`: `--config` sin ruta
+
+### Prompt 33
+**Herramienta:** terminal + código (Typer/Rich) · MiMo-V2.6-Flash Free OpenCode para documentar
+
+**Prompt del plan (agente Build):**
+el usuario aclaró el diseño de configuración: no quiere definir a mano cómo se
+usa `--config` con las opciones de las acciones; «quedamos» que se creara el
+fichero personal `mis-acciones.json` al instalar, que con `--config` no se
+pida ruta, que se abra ese fichero con destino/extensiones/origen y luego se
+guarde, y que ese fichero sea el que manda sobre todos los `acciones.json`.
+
+**Qué corregí del plan:**
+- el default de `--config` pasaba al JSON empaquetado: se cambió a `None` y
+  `_ruta_config` devuelve el fichero personal (`config.ruta_mis_acciones`,
+  creado solo con las del empaquetado si no existe) cuando no se pasó ruta;
+- `indexar` ahora recibe `ctx` para que su destino por defecto salga del
+  fichero efectivo.
+
+**Resultado (21-11-2026):** fichero personal `~/.cliWork/mis-acciones.json`
+(se crea al primer uso con las acciones del empaquetado) que manda por defecto;
+`--config <ruta>` sigue mandando esa ruta. 184 tests en verde.
+
+**Pendiente:** el retag de `v1.0.0` corregido, release y reintento del install
+cruzado (paso-9).

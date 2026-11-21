@@ -15,6 +15,44 @@ VERSION_ESPERADA = 1
 # no solo desde la raíz del proyecto (src/tareas/docs/acciones.json).
 RUTA_ACCIONES = Path(__file__).resolve().parent / "docs" / "acciones.json"
 
+
+# Fichero personal de acciones («mis-acciones.json»): se crea al instalar
+# (o al primer uso) como copia del JSON empaquetado y es el que manda por
+# defecto cuando no se pasa --config (la del distribución queda como fuente
+# cuando el personal no existe).
+def ruta_mis_acciones() -> Path:
+    """Dónde vive TU fichero de acciones personal: ~/.cliWork/mis-acciones.json.
+
+    Se calcula AQUÍ (no al importar el módulo): Path.home() mira HOME o
+    USERPROFILE en el momento de la llamada, así que los tests —que apuntan
+    esas variables a su sandbox— no crean el fichero del usuario de verdad.
+    """
+    return Path.home() / ".cliWork" / "mis-acciones.json"
+
+
+def preparar_mis_acciones() -> Path:
+    """Crea el fichero personal con las acciones del empaquetado si no existe.
+
+    Devuelve la ruta; el contenido inicial es el del JSON empaquetado (sus
+    opciones de origen/destino/extensiones por acción), que el usuario edita
+    en su fichero personal.
+    """
+    camino = ruta_mis_acciones()
+    if not camino.is_file():
+        texto = (
+            RUTA_ACCIONES.read_text(encoding="utf-8") if RUTA_ACCIONES.is_file() else "[]"
+        )
+        if texto and not texto.endswith("\n"):
+            texto += "\n"
+        camino.parent.mkdir(parents=True, exist_ok=True)
+        camino.write_text(texto, encoding="utf-8")
+    return camino
+
+
+def cargar_mis_acciones() -> list[dict[str, Any]]:
+    """Tus acciones: el fichero personal (se crea si no existe)."""
+    return cargar(preparar_mis_acciones())
+
 # Catálogo de tipos: si el tipo no está aquí, la acción no se puede ejecutar.
 TIPOS_CONOCIDOS = ("mover", "renombrar", "borrar", "abrir", "transformar",
                    "comprimir", "copiar", "limpiar-usb", "resumir",

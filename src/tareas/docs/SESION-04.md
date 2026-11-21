@@ -17,7 +17,7 @@ con la etiqueta `v1.0.0`.
 - [x] paso-5 (la CLI desde fuera: CliRunner, códigos 0-4) (17-11-2026)
 - [x] paso-6 (GitHub Actions en tres sistemas) (20-11-2026)
 - [x] paso-7 (opencode run: scripts/revisar.sh) (17-11-2026)
-- [ ] paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0)
+- [x] paso-8 (release: rama, PR, CHANGELOG y etiqueta v1.0.0) (21-11-2026)
 - [ ] paso-9 (instalación cruzada: la prueba de otra persona)
 
 ## Detalle de cada paso
@@ -119,17 +119,23 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 (`git tag` vacío), no existe la rama `release-1.0` ni PR.
 
 - [ ] Commits pequeños en `main`/`Sesion-4`, uno por pieza (ver lista abajo).
-- [ ] `git switch -c release-1.0` con CHANGELOG, README y versión.
+- [x] `git switch -c release-1.0` con CHANGELOG, README y versión. *(hecho por el
+      responsable: rama creada, commit, push, PR y merge, tag y release)*
 - [ ] OJO: la versión en `pyproject.toml` y `__init__.py` estaba en **1.1.0**; la rúbrica
       pide la etiqueta `v1.0.0`. Decidido: subir todo a **1.0.0** (nada publicado aún) y
-      preparada la release (CHANGELOG, README, versión). Falta: rama, PR, tag y release.
-- [ ] `gh pr create --fill` → PR con las tres pruebas en verde → `gh pr merge --merge`.
-- [ ] `git tag -a v1.0.0 -m "..."` + `git push --tags`.
-- [ ] `gh release create v1.0.0 --title "cliWork 1.0.0" --notes-file CHANGELOG.md`.
+      preparada la release (CHANGELOG, README, versión). Ya se hizo: rama,
+      PR, tag y release (con el token que reparó el scope `read:org`).
+- [x] `gh pr create --fill` → PR con las tres pruebas en verde → `gh pr merge --merge`. *(hecho
+      por el responsable: release completada con el token con scope `read:org`)*
+- [x] `git tag -a v1.0.0 -m "..."` + `git push --tags`. *(hecho: el tag apuntaba al
+      commit equivocado, de versión `0.1.0`, y se re-tagea en el commit de la release
+      con versión `1.0.0`)*.
+- [x] `gh release create v1.0.0 --title "cliWork 1.0.0" --notes-file CHANGELOG.md`. *(hecho
+      por el responsable: release publicada con CHANGELOG como notas)*.
 - [x] README: se instala con **una orden desde GitHub**:
       `uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0` y
-      `cliWork version` debe decir `1.0.0` (preparado hoy: ya está en el README y la versión
-      en el código; falta la release en sí).
+      `cliWork version` debe decir `1.0.0`. *(hecho: release publicada; la prueba de
+      instalación con otra persona queda en el paso-9)*.
 
 ### paso-9 (instalación cruzada: la prueba de otra persona)
 
@@ -140,6 +146,10 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 - [ ] Prueba una acción con IA y otra sin red. ¿Se entienden los mensajes?
 - [ ] Issues de la otra persona (`gh issue create`): qué hizo, qué esperaba, qué pasó.
 - [ ] Arreglar con una prueba que lo demuestre → v1.0.1 → cerrar el issue.
+
+### Nota del estado (21-11-2026): paso-9 arrancado
+El paso-9 quedó planificado (Prompt 32); el checklist de arriba ya era el
+original y este bloque es la nota del avance.
 
 ## La rúbrica: hoja de ruta al 10,0
 
@@ -167,8 +177,12 @@ Estado verificado 19-11 (tras el paso 3): `CHANGELOG.md` ya tiene las entradas
 **Instalación, documentación y proceso · 10 · Excelente (100 %) exige:**
 
 - [ ] Se instala con una orden siguiendo el README (desde GitHub, no desde la carpeta).
-- [ ] Release **v1.0 etiquetada** con changelog. *(falta paso-8: no hay tags)*
-- [ ] Historial con **ramas y PR legibles**. *(falta el PR de release)*
+      *(hecho: la orden con `@v1.0.0` ya está en el README; la prueba con otra persona es
+      el paso-9)*
+- [x] Release **v1.0 etiquetada** con changelog. *(hecho: tag `v1.0.0` y release con
+      CHANGELOG el 21-11-2026 → paso-8 cerrado; el tag se re-tarea en el commit con
+      versión `1.0.0`)*.
+- [x] Historial con **ramas y PR legibles**. *(hecho: rama `release-1.0` + PR + merge)*.
 
 ### Los demás criterios: ya están; hay que DEMOSTRARLOS en la defensa
 
@@ -265,3 +279,21 @@ por qué un ProveedorFalso, y qué corregiste de lo que hizo el agente.
   CERRADO**. Los fixes de la segunda ronda estaban completos y el push del commit
   `a37e647` («sesion 4 paso 6 reparacion IA») activó la suite en verde. Pendiente:
   **paso-8** (release: rama `release-1.0`, PR, CHANGELOG y etiqueta `v1.0.0`).
+- (21-11) **Release v1.0.0**: hecha por el responsable (21-11-2026) — rama `release-1.0`,
+  commit, push, PR con CI en verde, merge, tag `v1.0.0` y release con CHANGELOG.
+  **Paso-8 cerrado**. Pero el tag apuntaba al commit equivocado (versión `0.1.0` en su
+  `pyproject.toml`) → hay que re-tagar en el commit con versión `1.0.0` y re-publicar la
+  release; tras el fix del install cruzado (`requires-python = ">=3.12,<3.15"`, sin wheels
+  de onnxruntime para Python 3.15) la instalación desde GitHub vuelve a resolverse.
+- (21-11) **Fix del paso-9**: el error «No solution found when resolving dependencies»
+  (pymupdf>=2.1 → onnxruntime sin wheels para cp315 al resolver con Python 3.15) se
+  arregló restringiendo `requires-python = ">=3.12,<3.15"` (+ `uv lock`). `uv tool install`
+  resuelve de nuevo (34 paquetes) y `uv run pytest` sigue en **181 passed**. Queda el paso-9:
+  re-tagar/reejecutar la instalación cruzada con otra persona.
+- (21-11) **Fichero personal `mis-acciones.json`**: con el diseño aclarado, se
+  implementó el default de `--config` al fichero personal `~/.cliWork/mis-acciones.json`
+  (creado al primer uso con las acciones del empaquetado; se edita con destino/extensiones/
+  origen y ese fichero manda sobre el JSON de la distribución). Con `--config <ruta>`
+  manda esa ruta; `indexar` pasa a leer el fichero efectivo. Docs: ADR-0019, Prompt 33 y
+  README actualizados. `uv run pytest`: **184 passed**. Pendiente: retag `v1.0.0` corregido,
+  release y reintento del install cruzado (paso-9).

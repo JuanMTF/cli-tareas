@@ -7,7 +7,7 @@ JSON, nunca el código (ADR-0001).
 
 ## Instalar con una orden
 
-Necesitas [uv](https://docs.astral.sh/uv/). Desde GitHub (la release):
+Necesitas [uv](https://docs.astral.sh/uv/#highlights). Desde GitHub (la release):
 
 ```bash
 uv tool install git+https://github.com/JuanMTF/cli-tareas@v1.0.0
@@ -43,8 +43,19 @@ desarrollar, desde la carpeta del proyecto: `uv sync` y `uv run cliWork --help`.
 ## Cambiar carpetas y filtros sin tocar el código
 
 Todo lo que varía por persona (carpetas de origen/destino, extensiones,
-patrones, antigüedad…) vive en el JSON. Con la opción global `--config` se usa
-otro fichero de acciones en vez del empaquetado, sin tocar el código:
+patrones, antigüedad…) vive en un fichero de acciones. El tuyo es
+**`mis-acciones.json`**: se crea solo (al instalar o al primer uso) con las
+acciones del empaquetado y en él pones tus opciones de destino, origen y
+extensiones por acción. Ese fichero **manda sobre el JSON de la distribución**.
+
+- Sin `--config`: tu fichero personal manda (no hace falta escribir la ruta):
+
+```powershell
+uv run cliWork ejecutar ordenar-descargas --simular
+uv run cliWork validar
+```
+
+- Con `--config <ruta>`: otro fichero (p. ej. uno que copies de otro equipo):
 
 ```powershell
 uv run cliWork --config C:\ruta\mis-acciones.json validar

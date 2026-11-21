@@ -6,7 +6,10 @@ readme = "README.md"
 authors = [
     { name = "GranOsoPelutiLletx", email = "338292217+JuanMTF@users.noreply.github.com" }
 ]
-requires-python = ">=3.12"
+# pymupdf>=2.1 depende de onnxruntime, que no publica wheels para Python 3.15
+# (solo hasta cp314): el install del tool (uv tool install) debe resolverse en un
+# interprete con ruedas disponibles, asi que el techo lo fijamos en 3.15.
+requires-python = ">=3.12,<3.15"
 dependencies = [
     "click>=8.5.0",
     "httpx>=0.28.1",
