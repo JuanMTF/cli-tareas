@@ -1,0 +1,39 @@
+1a92d46 cambio en el Readme esplicacion mejorada
+ee6616f fallo de IA no encuentra .env
+41ff19d modificacion comando desistalar no va
+31ce1da  en otro pc la ia no va Se corrigue
+cd018e2  cambio de Readme para configuración de . env
+c702fe2 fichero personal correcion mis-acciones.json y fix del install del tool
+11d3632 antes de fusionar con main
+7394dbe Merge pull request #1 from JuanMTF/release-1.0
+d89ff42 se añade ip-conf
+5613025  Realizamos el relese
+7cdd9d0 crea changelog
+a37e647  sesion 4 paso 6 reparacion IA
+fa8188d Paso 6 de sesion 4
+6102864  ropemos la ia
+9d62624  Se hace restore y se prueba y ok Copia antes paso 4 en sesion 4 romper iA
+412d812  guiardado antes de paso 3 de Sesion 4 (romper el codigo)
+78d591b Realizo push antes de Cambios de romper cosas hasta aqui ok Todo
+36e5ffd Repaso los errores que detecta /rewiew
+db3b3ad x
+f2ac051 acciones resumir-apuntes renombrar-descriptivo limpiar-ocr clasificar-descargas estado-pc
+f5208d2  primera accion con Ia
+1b03deb Ia añadida conectada en Zai
+c3267c4  solucion de problema de instalacion de ubuntu
+b711e8a actualizo readme para entender mejor
+2e82f35 pruebas de auditotria pasadas ok
+9c033f4 Antes de Agente revisor , por si toca algo
+5f8f629 añadir Accion Usb-del test en simulacion ok
+554a450 cambio nombre al programa (cliwork)
+eb83522 aregla fallo transformacion-pdf-html no accia nada
+e49ded9  La Ia soluciona fallo del al ejecutar pruebas se queda colgado
+0dc48db Solucion del fallo de ruta absoluta
+9eefb27 solucion propuesta por Nemotron 3.5
+2cabb2c fallo de no implementado solo abrir
+a275710 Skill Acciones el agente carga las reglas de mi esquema
+dc61644 Punto recuperacion antes de crear otra rama
+ee7b987  Añadir ficheros despue de error de Git
+5af88e7  tarreas help test ok
+fac3dc2 Añade opencode.json con los permisos del agente y AGENTS.md con las normas del proyecto
+742be2f Crea el proyecto con uv y typer, con .gitignore y .gitattributes

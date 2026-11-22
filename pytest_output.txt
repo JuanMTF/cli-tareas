@@ -1,0 +1,21 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.16, pytest-9.2.0, pluggy-1.7.0
+rootdir: C:\Manuales\Programar\Grado Superior\Semipresencial DAM\Programacion\Opencode pruebas\cli-tareas
+configfile: pyproject.toml
+plugins: anyio-4.16.0
+collected 185 items
+
+tests\test_acciones.py ......                                            [  3%]
+tests\test_acciones_ia.py ..........................                     [ 17%]
+tests\test_cli.py ...................................................... [ 46%]
+..........                                                               [ 51%]
+tests\test_completado.py ...                                             [ 53%]
+tests\test_config.py ..........                                          [ 58%]
+tests\test_estado_pc.py ...............                                  [ 67%]
+tests\test_html.py ....................                                  [ 77%]
+tests\test_ia.py ...........                                             [ 83%]
+tests\test_ipconf.py .....                                               [ 86%]
+tests\test_traduccion.py .........                                       [ 91%]
+tests\test_usuario.py ................                                   [100%]
+
+============================ 185 passed in 18.08s =============================
